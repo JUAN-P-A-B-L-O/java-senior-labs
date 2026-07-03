@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -30,5 +31,10 @@ public class PaymentController {
     @ResponseStatus(HttpStatus.CREATED)
     public PaymentResponse createPayment(@Valid @RequestBody PaymentRequest request) {
         return paymentService.createPayment(request);
+    }
+
+    @GetMapping("/payments")
+    public List<PaymentResponse> getPayments() {
+        return paymentService.getPayments();
     }
 }

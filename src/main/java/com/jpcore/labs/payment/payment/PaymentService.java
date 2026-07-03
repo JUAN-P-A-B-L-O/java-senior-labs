@@ -3,6 +3,8 @@ package com.jpcore.labs.payment.payment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class PaymentService {
 
@@ -23,12 +25,24 @@ public class PaymentService {
 
         PaymentEntity savedPayment = paymentRepository.save(payment);
 
+        return toResponse(savedPayment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getPayments() {
+        return paymentRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private PaymentResponse toResponse(PaymentEntity payment) {
         return new PaymentResponse(
-                savedPayment.getId().toString(),
-                savedPayment.getAmount(),
-                savedPayment.getCurrency(),
-                savedPayment.getDescription(),
-                savedPayment.getStatus()
+                payment.getId().toString(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                payment.getDescription(),
+                payment.getStatus()
         );
     }
 }
