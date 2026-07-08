@@ -1,21 +1,39 @@
 package com.jpcore.labs.payment.payment;
 
+import com.jpcore.labs.payment.idempotency.IdempotencyService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class PaymentService {
 
-    private final PaymentRepository paymentRepository;
+    private static final Duration IDEMPOTENCY_EXPIRATION = Duration.ofHours(24);
 
-    public PaymentService(PaymentRepository paymentRepository) {
+    private final PaymentRepository paymentRepository;
+    private final IdempotencyService idempotencyService;
+
+    public PaymentService(PaymentRepository paymentRepository, IdempotencyService idempotencyService) {
         this.paymentRepository = paymentRepository;
+        this.idempotencyService = idempotencyService;
     }
 
     @Transactional
     public PaymentResponse createPayment(PaymentRequest request) {
+        idempotencyService.createProcessing(
+                UUID.randomUUID().toString(),
+                requestHash(request),
+                Instant.now().plus(IDEMPOTENCY_EXPIRATION)
+        );
+
         PaymentEntity payment = new PaymentEntity(
                 request.amount(),
                 request.currency(),
@@ -44,5 +62,16 @@ public class PaymentService {
                 payment.getDescription(),
                 payment.getStatus()
         );
+    }
+
+    private String requestHash(PaymentRequest request) {
+        String requestContent = request.amount() + "|" + request.currency() + "|" + request.description();
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(requestContent.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm is not available", exception);
+        }
     }
 }
