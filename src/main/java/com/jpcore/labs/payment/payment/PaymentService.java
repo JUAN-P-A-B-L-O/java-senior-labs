@@ -11,7 +11,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class PaymentService {
@@ -27,9 +26,9 @@ public class PaymentService {
     }
 
     @Transactional
-    public PaymentResponse createPayment(PaymentRequest request) {
+    public PaymentResponse createPayment(PaymentRequest request, String idempotencyKey) {
         idempotencyService.createProcessing(
-                UUID.randomUUID().toString(),
+                idempotencyKey,
                 requestHash(request),
                 Instant.now().plus(IDEMPOTENCY_EXPIRATION)
         );

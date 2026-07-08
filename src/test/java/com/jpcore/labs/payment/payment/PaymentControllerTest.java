@@ -32,6 +32,7 @@ class PaymentControllerTest {
     @Test
     void createPaymentReturnsCreated() throws Exception {
         mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", "create-payment-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -51,6 +52,7 @@ class PaymentControllerTest {
     @Test
     void getPaymentsReturnsAllPayments() throws Exception {
         mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", "first-payment-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -62,6 +64,7 @@ class PaymentControllerTest {
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", "second-payment-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -82,6 +85,7 @@ class PaymentControllerTest {
     @Test
     void createPaymentWithInvalidAmountReturnsBadRequest() throws Exception {
         mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", "invalid-amount-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -96,11 +100,26 @@ class PaymentControllerTest {
     @Test
     void createPaymentWithBlankCurrencyReturnsBadRequest() throws Exception {
         mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", "blank-currency-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "amount": 100.50,
                                   "currency": " ",
+                                  "description": "Test payment"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createPaymentWithoutIdempotencyKeyReturnsBadRequest() throws Exception {
+        mockMvc.perform(post("/api/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "amount": 100.50,
+                                  "currency": "BRL",
                                   "description": "Test payment"
                                 }
                                 """))

@@ -34,7 +34,7 @@ class PaymentServiceTest {
                 "Test payment"
         );
 
-        PaymentResponse response = paymentService.createPayment(request);
+        PaymentResponse response = paymentService.createPayment(request, "service-payment-key");
 
         IdempotencyEntity createdIdempotency = idempotencyRepository.findAll()
                 .stream()
@@ -44,6 +44,7 @@ class PaymentServiceTest {
 
         assertThat(response.id()).isNotBlank();
         assertThat(response.status()).isEqualTo(PaymentStatus.CREATED);
+        assertThat(createdIdempotency.getIdempotencyKey()).isEqualTo("service-payment-key");
         assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.PROCESSING);
         assertThat(createdIdempotency.getRequestBodyHash()).hasSize(64);
     }
