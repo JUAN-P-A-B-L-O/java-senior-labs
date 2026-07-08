@@ -1,4 +1,4 @@
-package com.jpcore.labs.payment.payment;
+package com.jpcore.labs.payment.idempotency;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
