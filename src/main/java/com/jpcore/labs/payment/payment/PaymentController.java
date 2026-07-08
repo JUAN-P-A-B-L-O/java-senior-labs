@@ -9,12 +9,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api")
 public class PaymentController {
+
+    private final PaymentService paymentService;
+
+    public PaymentController(PaymentService paymentService) {
+        this.paymentService = paymentService;
+    }
 
     @GetMapping("/health")
     public Map<String, String> health() {
@@ -24,12 +30,11 @@ public class PaymentController {
     @PostMapping("/payments")
     @ResponseStatus(HttpStatus.CREATED)
     public PaymentResponse createPayment(@Valid @RequestBody PaymentRequest request) {
-        return new PaymentResponse(
-                UUID.randomUUID().toString(),
-                request.amount(),
-                request.currency(),
-                request.description(),
-                PaymentStatus.CREATED
-        );
+        return paymentService.createPayment(request);
+    }
+
+    @GetMapping("/payments")
+    public List<PaymentResponse> getPayments() {
+        return paymentService.getPayments();
     }
 }

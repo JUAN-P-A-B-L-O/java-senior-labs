@@ -7,8 +7,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.blankOrNullString;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -45,6 +46,37 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.currency").value("BRL"))
                 .andExpect(jsonPath("$.description").value("Test payment"))
                 .andExpect(jsonPath("$.status").value("CREATED"));
+    }
+
+    @Test
+    void getPaymentsReturnsAllPayments() throws Exception {
+        mockMvc.perform(post("/api/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "amount": 100.50,
+                                  "currency": "BRL",
+                                  "description": "First payment"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "amount": 200.75,
+                                  "currency": "USD",
+                                  "description": "Second payment"
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/payments"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()", greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$[?(@.description == 'First payment')]").exists())
+                .andExpect(jsonPath("$[?(@.description == 'Second payment')]").exists());
     }
 
     @Test
