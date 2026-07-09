@@ -20,6 +20,16 @@ public class IdempotencyService {
         return idempotencyRepository.findById(idempotencyKey);
     }
 
+    @Transactional(readOnly = true)
+    public void validateBeforeCreate(String idempotencyKey, String requestBodyHash) {
+        findByKey(idempotencyKey)
+                .filter(idempotency -> idempotency.getRequestBodyHash().equals(requestBodyHash))
+                .filter(idempotency -> idempotency.getStatus() != IdempotencyStatus.FAILED)
+                .ifPresent(idempotency -> {
+                    throw new IdempotencyRequestBlockedException(idempotencyKey);
+                });
+    }
+
     @Transactional
     public IdempotencyEntity createProcessing(
             String idempotencyKey,

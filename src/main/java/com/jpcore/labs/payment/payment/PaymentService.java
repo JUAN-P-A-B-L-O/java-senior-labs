@@ -27,9 +27,12 @@ public class PaymentService {
 
     @Transactional
     public PaymentResponse createPayment(PaymentRequest request, String idempotencyKey) {
+        String requestBodyHash = requestHash(request);
+
+        idempotencyService.validateBeforeCreate(idempotencyKey, requestBodyHash);
         idempotencyService.createProcessing(
                 idempotencyKey,
-                requestHash(request),
+                requestBodyHash,
                 Instant.now().plus(IDEMPOTENCY_EXPIRATION)
         );
 
