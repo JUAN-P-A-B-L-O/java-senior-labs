@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -26,7 +27,7 @@ class PaymentServiceTest {
     private IdempotencyRepository idempotencyRepository;
 
     @Test
-    void createPaymentCreatesIdempotencyBeforePayment() {
+    void createPaymentCompletesIdempotencyWithPaymentId() {
         Set<String> idempotencyKeysBefore = idempotencyRepository.findAll()
                 .stream()
                 .map(IdempotencyEntity::getIdempotencyKey)
@@ -48,19 +49,39 @@ class PaymentServiceTest {
         assertThat(response.id()).isNotBlank();
         assertThat(response.status()).isEqualTo(PaymentStatus.CREATED);
         assertThat(createdIdempotency.getIdempotencyKey()).isEqualTo("service-payment-key");
-        assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.PROCESSING);
+        assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.COMPLETED);
         assertThat(createdIdempotency.getRequestBodyHash()).hasSize(64);
+        assertThat(createdIdempotency.getPaymentId()).isEqualTo(UUID.fromString(response.id()));
     }
 
     @Test
-    void createPaymentBlocksExistingSameRequestWhenStatusIsNotFailed() {
+    void createPaymentReturnsExistingPaymentWhenIdempotencyIsCompleted() {
         PaymentRequest request = new PaymentRequest(
                 new BigDecimal("55.00"),
                 "BRL",
                 "Duplicated payment"
         );
 
-        paymentService.createPayment(request, "blocked-payment-key");
+        PaymentResponse firstResponse = paymentService.createPayment(request, "completed-payment-key");
+        PaymentResponse secondResponse = paymentService.createPayment(request, "completed-payment-key");
+
+        assertThat(secondResponse).isEqualTo(firstResponse);
+    }
+
+    @Test
+    void createPaymentBlocksExistingSameRequestWhenStatusIsProcessing() {
+        PaymentRequest request = new PaymentRequest(
+                new BigDecimal("55.00"),
+                "BRL",
+                "Duplicated payment"
+        );
+        IdempotencyEntity processingIdempotency = new IdempotencyEntity(
+                "blocked-payment-key",
+                "751ae27d7facc0c1b8406e25dd6cd8d31d0abad55cfcfecc4ff4986b47756327",
+                IdempotencyStatus.PROCESSING,
+                Instant.now().plusSeconds(60)
+        );
+        idempotencyRepository.save(processingIdempotency);
 
         assertThatThrownBy(() -> paymentService.createPayment(request, "blocked-payment-key"))
                 .isInstanceOf(IdempotencyRequestBlockedException.class);
