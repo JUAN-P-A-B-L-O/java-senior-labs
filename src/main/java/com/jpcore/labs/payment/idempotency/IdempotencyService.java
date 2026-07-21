@@ -1,5 +1,6 @@
 package com.jpcore.labs.payment.idempotency;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +44,11 @@ public class IdempotencyService {
                 expiresAt
         );
 
-        return idempotencyRepository.save(idempotency);
+        try {
+            return idempotencyRepository.saveAndFlush(idempotency);
+        } catch (DataIntegrityViolationException exception) {
+            throw new IdempotencyRequestBlockedException(idempotencyKey);
+        }
     }
 
     public boolean isExpired(IdempotencyEntity idempotency, Instant now) {
