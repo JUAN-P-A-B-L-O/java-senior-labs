@@ -10,6 +10,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,6 +69,24 @@ class IdempotencyServiceTest {
         assertThatThrownBy(() -> idempotencyService.createProcessing("payment-key", "request-hash", expiresAt))
                 .isInstanceOf(IdempotencyRequestBlockedException.class)
                 .hasMessageContaining("payment-key");
+    }
+
+    @Test
+    void findCompletedPaymentIdReturnsPaymentIdWhenRequestIsCompleted() {
+        UUID paymentId = UUID.fromString("4129fd8e-17ec-4e8a-b72a-f55ef7a3830c");
+        IdempotencyEntity idempotency = new IdempotencyEntity(
+                "payment-key",
+                "request-hash",
+                IdempotencyStatus.COMPLETED,
+                Instant.parse("2026-07-07T21:30:00Z"),
+                paymentId
+        );
+
+        when(idempotencyRepository.findById("payment-key")).thenReturn(Optional.of(idempotency));
+
+        Optional<UUID> result = idempotencyService.findCompletedPaymentId("payment-key", "request-hash");
+
+        assertThat(result).contains(paymentId);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.jpcore.labs.payment.payment;
 
 import com.jpcore.labs.payment.idempotency.IdempotencyService;
+import com.jpcore.labs.payment.idempotency.IdempotencyEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class PaymentService {
@@ -29,8 +31,16 @@ public class PaymentService {
     public PaymentResponse createPayment(PaymentRequest request, String idempotencyKey) {
         String requestBodyHash = requestHash(request);
 
+        Optional<PaymentResponse> completedPayment = idempotencyService.findCompletedPaymentId(idempotencyKey, requestBodyHash)
+                .flatMap(paymentRepository::findById)
+                .map(this::toResponse);
+
+        if (completedPayment.isPresent()) {
+            return completedPayment.get();
+        }
+
         idempotencyService.validateBeforeCreate(idempotencyKey, requestBodyHash);
-        idempotencyService.createProcessing(
+        IdempotencyEntity idempotency = idempotencyService.createProcessing(
                 idempotencyKey,
                 requestBodyHash,
                 Instant.now().plus(IDEMPOTENCY_EXPIRATION)
@@ -43,7 +53,8 @@ public class PaymentService {
                 PaymentStatus.CREATED
         );
 
-        PaymentEntity savedPayment = paymentRepository.save(payment);
+        PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
+        idempotencyService.complete(idempotency, savedPayment.getId());
 
         return toResponse(savedPayment);
     }
@@ -76,4 +87,5 @@ public class PaymentService {
             throw new IllegalStateException("SHA-256 algorithm is not available", exception);
         }
     }
+
 }

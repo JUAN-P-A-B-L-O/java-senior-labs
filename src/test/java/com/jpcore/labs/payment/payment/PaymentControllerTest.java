@@ -7,11 +7,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.blankOrNullString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,7 +52,7 @@ class PaymentControllerTest {
     }
 
     @Test
-    void createPaymentWithRepeatedIdempotencyKeyAndSameBodyReturnsConflict() throws Exception {
+    void createPaymentWithRepeatedCompletedIdempotencyKeyAndSameBodyReturnsCreatedPayment() throws Exception {
         String requestBody = """
                 {
                   "amount": 150.25,
@@ -59,17 +61,23 @@ class PaymentControllerTest {
                 }
                 """;
 
-        mockMvc.perform(post("/api/payments")
+        String firstResponse = mockMvc.perform(post("/api/payments")
                         .header("Idempotency-Key", "repeated-payment-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertThat(firstResponse).isNotBlank();
 
         mockMvc.perform(post("/api/payments")
                         .header("Idempotency-Key", "repeated-payment-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
-                .andExpect(status().isConflict());
+                .andExpect(status().isCreated())
+                .andExpect(content().json(firstResponse));
     }
 
     @Test

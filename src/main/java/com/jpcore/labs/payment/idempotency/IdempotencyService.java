@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class IdempotencyService {
@@ -25,10 +26,18 @@ public class IdempotencyService {
     public void validateBeforeCreate(String idempotencyKey, String requestBodyHash) {
         findByKey(idempotencyKey)
                 .filter(idempotency -> idempotency.getRequestBodyHash().equals(requestBodyHash))
-                .filter(idempotency -> idempotency.getStatus() != IdempotencyStatus.FAILED)
+                .filter(idempotency -> idempotency.getStatus() == IdempotencyStatus.PROCESSING)
                 .ifPresent(idempotency -> {
                     throw new IdempotencyRequestBlockedException(idempotencyKey);
                 });
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<UUID> findCompletedPaymentId(String idempotencyKey, String requestBodyHash) {
+        return findByKey(idempotencyKey)
+                .filter(idempotency -> idempotency.getRequestBodyHash().equals(requestBodyHash))
+                .filter(idempotency -> idempotency.getStatus() == IdempotencyStatus.COMPLETED)
+                .map(IdempotencyEntity::getPaymentId);
     }
 
     @Transactional
@@ -37,6 +46,14 @@ public class IdempotencyService {
             String requestBodyHash,
             Instant expiresAt
     ) {
+        Optional<IdempotencyEntity> existingIdempotency = findByKey(idempotencyKey);
+        if (existingIdempotency.isPresent()
+                && existingIdempotency.get().getStatus() == IdempotencyStatus.FAILED) {
+            IdempotencyEntity idempotency = existingIdempotency.get();
+            idempotency.markProcessing(requestBodyHash, expiresAt);
+            return idempotencyRepository.saveAndFlush(idempotency);
+        }
+
         IdempotencyEntity idempotency = new IdempotencyEntity(
                 idempotencyKey,
                 requestBodyHash,
@@ -49,6 +66,12 @@ public class IdempotencyService {
         } catch (DataIntegrityViolationException exception) {
             throw new IdempotencyRequestBlockedException(idempotencyKey);
         }
+    }
+
+    @Transactional
+    public void complete(IdempotencyEntity idempotency, UUID paymentId) {
+        idempotency.markCompleted(paymentId);
+        idempotencyRepository.save(idempotency);
     }
 
     public boolean isExpired(IdempotencyEntity idempotency, Instant now) {

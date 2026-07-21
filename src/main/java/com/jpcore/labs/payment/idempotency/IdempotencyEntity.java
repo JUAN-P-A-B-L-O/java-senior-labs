@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "idempotency_keys")
@@ -27,6 +28,9 @@ public class IdempotencyEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "payment_id")
+    private UUID paymentId;
+
     protected IdempotencyEntity() {
     }
 
@@ -36,10 +40,21 @@ public class IdempotencyEntity {
             IdempotencyStatus status,
             Instant expiresAt
     ) {
+        this(idempotencyKey, requestBodyHash, status, expiresAt, null);
+    }
+
+    public IdempotencyEntity(
+            String idempotencyKey,
+            String requestBodyHash,
+            IdempotencyStatus status,
+            Instant expiresAt,
+            UUID paymentId
+    ) {
         this.idempotencyKey = idempotencyKey;
         this.requestBodyHash = requestBodyHash;
         this.status = status;
         this.expiresAt = expiresAt;
+        this.paymentId = paymentId;
     }
 
     public String getIdempotencyKey() {
@@ -56,5 +71,21 @@ public class IdempotencyEntity {
 
     public Instant getExpiresAt() {
         return expiresAt;
+    }
+
+    public UUID getPaymentId() {
+        return paymentId;
+    }
+
+    public void markProcessing(String requestBodyHash, Instant expiresAt) {
+        this.requestBodyHash = requestBodyHash;
+        this.status = IdempotencyStatus.PROCESSING;
+        this.expiresAt = expiresAt;
+        this.paymentId = null;
+    }
+
+    public void markCompleted(UUID paymentId) {
+        this.status = IdempotencyStatus.COMPLETED;
+        this.paymentId = paymentId;
     }
 }
