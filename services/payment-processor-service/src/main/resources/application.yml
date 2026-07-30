@@ -1,0 +1,6 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: payment-processor-service
