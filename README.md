@@ -12,7 +12,7 @@ Minimal Java 21 + Spring Boot 3 Payment API for backend interview practice.
 
 ```bash
 docker compose up -d postgres
-mvn spring-boot:run
+mvn -pl services/payment-service spring-boot:run
 ```
 
 If Docker Compose is not installed, you can start PostgreSQL with Docker directly:
