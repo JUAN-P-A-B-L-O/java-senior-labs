@@ -21,10 +21,16 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final IdempotencyService idempotencyService;
+    private final PaymentRequestedPublisher paymentRequestedPublisher;
 
-    public PaymentService(PaymentRepository paymentRepository, IdempotencyService idempotencyService) {
+    public PaymentService(
+            PaymentRepository paymentRepository,
+            IdempotencyService idempotencyService,
+            PaymentRequestedPublisher paymentRequestedPublisher
+    ) {
         this.paymentRepository = paymentRepository;
         this.idempotencyService = idempotencyService;
+        this.paymentRequestedPublisher = paymentRequestedPublisher;
     }
 
     @Transactional
@@ -55,6 +61,7 @@ public class PaymentService {
 
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
         idempotencyService.complete(idempotency, savedPayment.getId());
+        paymentRequestedPublisher.publish(savedPayment);
 
         return toResponse(savedPayment);
     }

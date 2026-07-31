@@ -7,6 +7,7 @@ import com.jpcore.labs.payment.idempotency.IdempotencyStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -16,6 +17,9 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 class PaymentServiceTest {
@@ -25,6 +29,9 @@ class PaymentServiceTest {
 
     @Autowired
     private IdempotencyRepository idempotencyRepository;
+
+    @MockBean
+    private PaymentRequestedPublisher paymentRequestedPublisher;
 
     @Test
     void createPaymentCompletesIdempotencyWithPaymentId() {
@@ -52,6 +59,7 @@ class PaymentServiceTest {
         assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.COMPLETED);
         assertThat(createdIdempotency.getRequestBodyHash()).hasSize(64);
         assertThat(createdIdempotency.getPaymentId()).isEqualTo(UUID.fromString(response.id()));
+        verify(paymentRequestedPublisher).publish(any(PaymentEntity.class));
     }
 
     @Test
@@ -66,6 +74,7 @@ class PaymentServiceTest {
         PaymentResponse secondResponse = paymentService.createPayment(request, "completed-payment-key");
 
         assertThat(secondResponse).isEqualTo(firstResponse);
+        verify(paymentRequestedPublisher, times(1)).publish(any(PaymentEntity.class));
     }
 
     @Test
