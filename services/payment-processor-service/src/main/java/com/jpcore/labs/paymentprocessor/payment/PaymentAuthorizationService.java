@@ -26,10 +26,13 @@ public class PaymentAuthorizationService {
                     .retrieve()
                     .body(AuthorizationResponse.class);
 
-            return response != null && response.isAuthorized();
+            if (response != null && response.isAuthorized()) {
+                return true;
+            }
+
+            throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
         } catch (RestClientException exception) {
-            System.out.println("paymentRequested authorization failed for paymentId=" + message.paymentId());
-            return false;
+            throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId(), exception);
         }
     }
 }

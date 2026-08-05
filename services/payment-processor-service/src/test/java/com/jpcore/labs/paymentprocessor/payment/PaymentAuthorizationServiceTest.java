@@ -9,11 +9,12 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
-import static org.springframework.http.HttpMethod.GET;
 
 class PaymentAuthorizationServiceTest {
 
@@ -45,7 +46,7 @@ class PaymentAuthorizationServiceTest {
     }
 
     @Test
-    void returnsFalseWhenAuthorizationEndpointDeniesPayment() {
+    void throwsExceptionWhenAuthorizationEndpointDeniesPayment() {
         server.expect(requestTo(AUTHORIZATION_URL))
                 .andExpect(method(GET))
                 .andRespond(withSuccess(
@@ -53,21 +54,23 @@ class PaymentAuthorizationServiceTest {
                         MediaType.APPLICATION_JSON
                 ));
 
-        boolean authorized = service.authorize(paymentRequestedMessage());
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(PaymentAuthorizationException.class)
+                .hasMessage("Payment authorization failed for paymentId=payment-123");
 
-        assertThat(authorized).isFalse();
         server.verify();
     }
 
     @Test
-    void returnsFalseWhenAuthorizationEndpointFails() {
+    void throwsExceptionWhenAuthorizationEndpointFails() {
         server.expect(requestTo(AUTHORIZATION_URL))
                 .andExpect(method(GET))
                 .andRespond(withServerError());
 
-        boolean authorized = service.authorize(paymentRequestedMessage());
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(PaymentAuthorizationException.class)
+                .hasMessage("Payment authorization failed for paymentId=payment-123");
 
-        assertThat(authorized).isFalse();
         server.verify();
     }
 
