@@ -3,3 +3,6 @@ spring:
     listener:
       simple:
         auto-startup: false
+
+payment-processor:
+  authorization-url: https://util.devi.tools/api/v2/authorize
