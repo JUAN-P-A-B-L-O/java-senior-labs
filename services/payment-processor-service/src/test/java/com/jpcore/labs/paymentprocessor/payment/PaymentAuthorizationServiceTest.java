@@ -7,6 +7,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -76,6 +77,7 @@ class PaymentAuthorizationServiceTest {
 
     private PaymentRequestedMessage paymentRequestedMessage() {
         return new PaymentRequestedMessage(
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 "payment-123",
                 BigDecimal.TEN,
                 "BRL",

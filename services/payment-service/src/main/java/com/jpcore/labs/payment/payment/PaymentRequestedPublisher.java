@@ -4,6 +4,8 @@ import com.jpcore.labs.payment.config.RabbitMqConfig;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 public class PaymentRequestedPublisher {
 
@@ -15,6 +17,7 @@ public class PaymentRequestedPublisher {
 
     public void publish(PaymentEntity payment) {
         PaymentRequestedMessage message = new PaymentRequestedMessage(
+                UUID.randomUUID(),
                 payment.getId().toString(),
                 payment.getAmount(),
                 payment.getCurrency(),

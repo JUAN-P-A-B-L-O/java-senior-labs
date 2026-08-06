@@ -27,8 +27,7 @@ public class PaymentAuthorizationService {
                     .body(AuthorizationResponse.class);
 
             if (response != null && response.isAuthorized()) {
-                throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
-//                return true;
+                return true;
             }
 
             throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
