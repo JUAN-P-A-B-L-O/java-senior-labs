@@ -61,6 +61,7 @@ public class PaymentService {
 
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
         idempotencyService.complete(idempotency, savedPayment.getId());
+      
         paymentRequestedPublisher.publish(savedPayment);
 
         return toResponse(savedPayment);

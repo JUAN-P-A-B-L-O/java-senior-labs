@@ -1,5 +1,7 @@
 package com.jpcore.labs.payment.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
@@ -14,6 +16,8 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitMqConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(RabbitMqConfig.class);
 
     public static final String PAYMENT_EXCHANGE = "payment.exchange";
     public static final String PAYMENT_PROCESS_QUEUE = "payment.process.queue";
@@ -71,6 +75,26 @@ public class RabbitMqConfig {
     public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory, MessageConverter messageConverter) {
         RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
         rabbitTemplate.setMessageConverter(messageConverter);
+        rabbitTemplate.setMandatory(true);
+        rabbitTemplate.setConfirmCallback((correlationData, ack, cause) -> {
+            String correlationId = correlationData != null ? correlationData.getId() : "unknown";
+            if (ack) {
+                log.info("Payment requested message confirmed by broker. correlationId={}", correlationId);
+                return;
+            }
+            log.error(
+                    "Payment requested message was not confirmed by broker. correlationId={} cause={}",
+                    correlationId,
+                    cause
+            );
+        });
+        rabbitTemplate.setReturnsCallback(returned -> log.error(
+                "Payment requested message returned by broker. replyCode={} replyText={} exchange={} routingKey={}",
+                returned.getReplyCode(),
+                returned.getReplyText(),
+                returned.getExchange(),
+                returned.getRoutingKey()
+        ));
         return rabbitTemplate;
     }
 }

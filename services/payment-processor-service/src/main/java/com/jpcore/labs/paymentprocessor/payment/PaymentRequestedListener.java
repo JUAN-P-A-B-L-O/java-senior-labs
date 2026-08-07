@@ -19,7 +19,7 @@ public class PaymentRequestedListener {
     }
 
     @RabbitListener(queues = RabbitMqConfig.PAYMENT_PROCESS_QUEUE)
-    public void listen(PaymentRequestedMessage message) {
+    public void listen(PaymentRequestedMessage message) throws InterruptedException {
         if (processedEventService.isProcessed(message.eventId())) {
             System.out.println("paymentRequested duplicated ignored: " + message.eventId());
             return;
@@ -28,6 +28,8 @@ public class PaymentRequestedListener {
         System.out.println("paymentRequested received: " + message);
         boolean authorized = paymentAuthorizationService.authorize(message);
         processedEventService.markProcessed(message.eventId());
+        Thread.sleep(15000);
+
         System.out.println("paymentRequested authorization result: " + authorized);
 
 
