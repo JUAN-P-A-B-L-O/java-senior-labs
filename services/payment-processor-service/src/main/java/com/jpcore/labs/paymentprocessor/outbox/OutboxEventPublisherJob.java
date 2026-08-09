@@ -1,7 +1,6 @@
-package com.jpcore.labs.payment.outbox;
+package com.jpcore.labs.paymentprocessor.outbox;
 
-import com.jpcore.labs.payment.config.RabbitMqConfig;
-import com.jpcore.labs.payment.payment.PaymentRequestedMessage;
+import com.jpcore.labs.paymentprocessor.config.RabbitMqConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
@@ -30,18 +29,26 @@ public class OutboxEventPublisherJob {
 
     private void publish(OutboxEventEntity outboxEvent) {
         try {
-            PaymentRequestedMessage message = outboxEventService.toPaymentRequestedMessage(outboxEvent);
-            CorrelationData correlationData = new CorrelationData(outboxEvent.getEventId().toString());
-
+            Object message = outboxEventService.toMessage(outboxEvent);
             rabbitTemplate.convertAndSend(
                     RabbitMqConfig.PAYMENT_EXCHANGE,
-                    RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY,
+                    routingKey(outboxEvent),
                     message,
-                    correlationData
+                    new CorrelationData(outboxEvent.getEventId().toString())
             );
             outboxEventService.markPublished(outboxEvent);
         } catch (RuntimeException exception) {
-            log.error("Could not publish outbox event. eventId={}", outboxEvent.getEventId(), exception);
+            log.error("Could not publish processor outbox event. eventId={}", outboxEvent.getEventId(), exception);
         }
+    }
+
+    private String routingKey(OutboxEventEntity outboxEvent) {
+        if (OutboxEventService.PAYMENT_PROCESSED.equals(outboxEvent.getEventType())) {
+            return RabbitMqConfig.PAYMENT_PROCESSED_ROUTING_KEY;
+        }
+        if (OutboxEventService.PAYMENT_PROCESSING_FAILED.equals(outboxEvent.getEventType())) {
+            return RabbitMqConfig.PAYMENT_PROCESSING_FAILED_ROUTING_KEY;
+        }
+        throw new IllegalStateException("Unknown outbox event type: " + outboxEvent.getEventType());
     }
 }

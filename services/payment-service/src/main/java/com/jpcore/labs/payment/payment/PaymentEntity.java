@@ -66,4 +66,12 @@ public class PaymentEntity {
     public PaymentStatus getStatus() {
         return status;
     }
+
+    public void markCompleted() {
+        this.status = PaymentStatus.COMPLETED;
+    }
+
+    public void markFailed() {
+        this.status = PaymentStatus.FAILED;
+    }
 }

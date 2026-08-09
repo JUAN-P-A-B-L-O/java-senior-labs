@@ -25,7 +25,5 @@ public class PaymentRequestedPublisher {
                 payment.getDescription()
         );
         outboxEventService.savePaymentRequested(message);
-        System.out.println("cheguei2");
-
     }
 }

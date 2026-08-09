@@ -1,5 +1,8 @@
 package com.jpcore.labs.payment.config;
 
+import com.jpcore.labs.payment.payment.PaymentProcessedMessage;
+import com.jpcore.labs.payment.payment.PaymentProcessingFailedMessage;
+import com.jpcore.labs.payment.payment.PaymentRequestedMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Binding;
@@ -9,10 +12,13 @@ import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.DefaultClassMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
 
 @Configuration
 public class RabbitMqConfig {
@@ -25,6 +31,12 @@ public class RabbitMqConfig {
     public static final String PAYMENT_PROCESS_DEAD_LETTER_EXCHANGE = "payment.process.dlx";
     public static final String PAYMENT_PROCESS_DEAD_LETTER_QUEUE = "payment.process.dlq";
     public static final String PAYMENT_PROCESS_DEAD_LETTER_ROUTING_KEY = "payment.process.dlq";
+    public static final String PAYMENT_RESULT_QUEUE = "payment.result.queue";
+    public static final String PAYMENT_PROCESSED_ROUTING_KEY = "payment.processed";
+    public static final String PAYMENT_PROCESSING_FAILED_ROUTING_KEY = "payment.processing.failed";
+    public static final String PAYMENT_RESULT_DEAD_LETTER_EXCHANGE = "payment.result.dlx";
+    public static final String PAYMENT_RESULT_DEAD_LETTER_QUEUE = "payment.result.dlq";
+    public static final String PAYMENT_RESULT_DEAD_LETTER_ROUTING_KEY = "payment.result.dlq";
 
     @Bean
     public DirectExchange paymentExchange() {
@@ -67,8 +79,59 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public Queue paymentResultQueue() {
+        return QueueBuilder.durable(PAYMENT_RESULT_QUEUE)
+                .deadLetterExchange(PAYMENT_RESULT_DEAD_LETTER_EXCHANGE)
+                .deadLetterRoutingKey(PAYMENT_RESULT_DEAD_LETTER_ROUTING_KEY)
+                .build();
+    }
+
+    @Bean
+    public Binding paymentProcessedBinding(Queue paymentResultQueue, DirectExchange paymentExchange) {
+        return BindingBuilder.bind(paymentResultQueue)
+                .to(paymentExchange)
+                .with(PAYMENT_PROCESSED_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding paymentProcessingFailedBinding(Queue paymentResultQueue, DirectExchange paymentExchange) {
+        return BindingBuilder.bind(paymentResultQueue)
+                .to(paymentExchange)
+                .with(PAYMENT_PROCESSING_FAILED_ROUTING_KEY);
+    }
+
+    @Bean
+    public DirectExchange paymentResultDeadLetterExchange() {
+        return new DirectExchange(PAYMENT_RESULT_DEAD_LETTER_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue paymentResultDeadLetterQueue() {
+        return QueueBuilder.durable(PAYMENT_RESULT_DEAD_LETTER_QUEUE).build();
+    }
+
+    @Bean
+    public Binding paymentResultDeadLetterBinding(
+            Queue paymentResultDeadLetterQueue,
+            DirectExchange paymentResultDeadLetterExchange
+    ) {
+        return BindingBuilder.bind(paymentResultDeadLetterQueue)
+                .to(paymentResultDeadLetterExchange)
+                .with(PAYMENT_RESULT_DEAD_LETTER_ROUTING_KEY);
+    }
+
+    @Bean
     public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
+        Jackson2JsonMessageConverter messageConverter = new Jackson2JsonMessageConverter();
+        DefaultClassMapper classMapper = new DefaultClassMapper();
+        classMapper.setIdClassMapping(Map.of(
+                "PaymentRequested", PaymentRequestedMessage.class,
+                "PaymentProcessed", PaymentProcessedMessage.class,
+                "PaymentProcessingFailed", PaymentProcessingFailedMessage.class
+        ));
+        classMapper.afterPropertiesSet();
+        messageConverter.setClassMapper(classMapper);
+        return messageConverter;
     }
 
     @Bean

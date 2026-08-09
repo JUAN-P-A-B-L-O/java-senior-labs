@@ -15,6 +15,8 @@ spring:
   flyway:
     enabled: true
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
     listener:
       simple:
         default-requeue-rejected: false

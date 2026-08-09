@@ -52,7 +52,7 @@ class PaymentControllerTest {
                 .andExpect(jsonPath("$.amount").value(100.50))
                 .andExpect(jsonPath("$.currency").value("BRL"))
                 .andExpect(jsonPath("$.description").value("Test payment"))
-                .andExpect(jsonPath("$.status").value("CREATED"));
+                .andExpect(jsonPath("$.status").value("PROCESSING"));
     }
 
     @Test

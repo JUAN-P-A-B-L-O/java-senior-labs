@@ -1,37 +1,45 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
 import com.jpcore.labs.paymentprocessor.config.RabbitMqConfig;
+import com.jpcore.labs.paymentprocessor.outbox.OutboxEventService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PaymentRequestedListener {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentRequestedListener.class);
+
     private final PaymentAuthorizationService paymentAuthorizationService;
     private final ProcessedEventService processedEventService;
+    private final OutboxEventService outboxEventService;
 
     public PaymentRequestedListener(
             PaymentAuthorizationService paymentAuthorizationService,
-            ProcessedEventService processedEventService
+            ProcessedEventService processedEventService,
+            OutboxEventService outboxEventService
     ) {
         this.paymentAuthorizationService = paymentAuthorizationService;
         this.processedEventService = processedEventService;
+        this.outboxEventService = outboxEventService;
     }
 
     @RabbitListener(queues = RabbitMqConfig.PAYMENT_PROCESS_QUEUE)
-    public void listen(PaymentRequestedMessage message) throws InterruptedException {
+    public void listen(PaymentRequestedMessage message) {
         if (processedEventService.isProcessed(message.eventId())) {
-            System.out.println("paymentRequested duplicated ignored: " + message.eventId());
+            log.info("paymentRequested duplicated ignored: {}", message.eventId());
             return;
         }
 
-        System.out.println("paymentRequested received: " + message);
-        boolean authorized = paymentAuthorizationService.authorize(message);
+        log.info("paymentRequested received: {}", message);
+        try {
+            paymentAuthorizationService.authorize(message);
+            outboxEventService.savePaymentProcessed(message.eventId(), message.paymentId());
+        } catch (PaymentAuthorizationException exception) {
+            outboxEventService.savePaymentProcessingFailed(message.eventId(), message.paymentId(), exception.getMessage());
+        }
         processedEventService.markProcessed(message.eventId());
-        Thread.sleep(15000);
-
-        System.out.println("paymentRequested authorization result: " + authorized);
-
-
     }
 }

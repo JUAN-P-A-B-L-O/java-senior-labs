@@ -10,3 +10,14 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2s
+          multiplier: 1
+          max-interval: 2s

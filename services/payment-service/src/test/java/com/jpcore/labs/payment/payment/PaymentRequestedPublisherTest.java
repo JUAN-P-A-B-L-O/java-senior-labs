@@ -22,7 +22,7 @@ class PaymentRequestedPublisherTest {
                 new BigDecimal("100.50"),
                 "BRL",
                 "test payment",
-                PaymentStatus.CREATED
+                PaymentStatus.PROCESSING
         );
         UUID paymentId = UUID.fromString("22222222-2222-2222-2222-222222222222");
         ReflectionTestUtils.setField(payment, "id", paymentId);

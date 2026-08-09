@@ -4,6 +4,15 @@ spring:
   rabbitmq:
     publisher-confirm-type: correlated
     publisher-returns: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2s
+          multiplier: 1
+          max-interval: 2s
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5433/payment_lab}
     username: ${DB_USERNAME:payment_lab}

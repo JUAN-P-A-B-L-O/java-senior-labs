@@ -54,7 +54,7 @@ class PaymentServiceTest {
                 .orElseThrow();
 
         assertThat(response.id()).isNotBlank();
-        assertThat(response.status()).isEqualTo(PaymentStatus.CREATED);
+        assertThat(response.status()).isEqualTo(PaymentStatus.PROCESSING);
         assertThat(createdIdempotency.getIdempotencyKey()).isEqualTo("service-payment-key");
         assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.COMPLETED);
         assertThat(createdIdempotency.getRequestBodyHash()).hasSize(64);
@@ -113,6 +113,44 @@ class PaymentServiceTest {
 
         PaymentResponse response = paymentService.createPayment(request, "failed-payment-key");
 
-        assertThat(response.status()).isEqualTo(PaymentStatus.CREATED);
+        assertThat(response.status()).isEqualTo(PaymentStatus.PROCESSING);
+    }
+
+    @Test
+    void completePaymentUpdatesProcessingPaymentToCompleted() {
+        PaymentRequest request = new PaymentRequest(
+                new BigDecimal("88.00"),
+                "BRL",
+                "Complete payment"
+        );
+        PaymentResponse response = paymentService.createPayment(request, "complete-payment-key");
+
+        paymentService.completePayment(response.id());
+
+        PaymentResponse updatedPayment = paymentService.getPayments()
+                .stream()
+                .filter(payment -> payment.id().equals(response.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(updatedPayment.status()).isEqualTo(PaymentStatus.COMPLETED);
+    }
+
+    @Test
+    void failPaymentUpdatesProcessingPaymentToFailed() {
+        PaymentRequest request = new PaymentRequest(
+                new BigDecimal("89.00"),
+                "BRL",
+                "Fail payment"
+        );
+        PaymentResponse response = paymentService.createPayment(request, "fail-payment-key");
+
+        paymentService.failPayment(response.id());
+
+        PaymentResponse updatedPayment = paymentService.getPayments()
+                .stream()
+                .filter(payment -> payment.id().equals(response.id()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(updatedPayment.status()).isEqualTo(PaymentStatus.FAILED);
     }
 }

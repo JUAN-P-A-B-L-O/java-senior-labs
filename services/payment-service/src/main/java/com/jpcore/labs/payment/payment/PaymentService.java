@@ -56,7 +56,7 @@ public class PaymentService {
                 request.amount(),
                 request.currency(),
                 request.description(),
-                PaymentStatus.CREATED
+                PaymentStatus.PROCESSING
         );
 
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
@@ -73,6 +73,24 @@ public class PaymentService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public void completePayment(String paymentId) {
+        PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+        if (payment.getStatus() == PaymentStatus.PROCESSING) {
+            payment.markCompleted();
+        }
+    }
+
+    @Transactional
+    public void failPayment(String paymentId) {
+        PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
+                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+        if (payment.getStatus() == PaymentStatus.PROCESSING) {
+            payment.markFailed();
+        }
     }
 
     private PaymentResponse toResponse(PaymentEntity payment) {
