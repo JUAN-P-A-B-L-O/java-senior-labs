@@ -6,6 +6,7 @@ import com.jpcore.labs.payment.payment.PaymentRequestedMessage;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -27,10 +28,22 @@ public class OutboxEventService {
                 UUID.fromString(message.paymentId()),
                 PAYMENT_REQUESTED,
                 toPayload(message),
-                OutboxEventStatus.PENDING
+                OutboxEventStatus.WAITING_PUBLISH
         );
 
         return outboxEventRepository.saveAndFlush(outboxEvent);
+    }
+
+    public List<OutboxEventEntity> findWaitingPublish() {
+        return outboxEventRepository.findByStatusOrderByCreatedAtAsc(OutboxEventStatus.WAITING_PUBLISH);
+    }
+
+    public PaymentRequestedMessage toPaymentRequestedMessage(OutboxEventEntity outboxEvent) {
+        try {
+            return objectMapper.readValue(outboxEvent.getPayload(), PaymentRequestedMessage.class);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Could not deserialize outbox event payload", exception);
+        }
     }
 
     public void markPublished(OutboxEventEntity outboxEvent) {

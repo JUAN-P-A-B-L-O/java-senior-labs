@@ -1,10 +1,6 @@
 package com.jpcore.labs.payment.payment;
 
-import com.jpcore.labs.payment.config.RabbitMqConfig;
-import com.jpcore.labs.payment.outbox.OutboxEventEntity;
 import com.jpcore.labs.payment.outbox.OutboxEventService;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -12,16 +8,15 @@ import java.util.UUID;
 @Service
 public class PaymentRequestedPublisher {
 
-    private final RabbitTemplate rabbitTemplate;
     private final OutboxEventService outboxEventService;
 
-    public PaymentRequestedPublisher(RabbitTemplate rabbitTemplate, OutboxEventService outboxEventService) {
-        this.rabbitTemplate = rabbitTemplate;
+    public PaymentRequestedPublisher(OutboxEventService outboxEventService) {
         this.outboxEventService = outboxEventService;
     }
 
     public void publish(PaymentEntity payment) {
         UUID eventId = UUID.randomUUID();
+
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 eventId,
                 payment.getId().toString(),
@@ -29,15 +24,8 @@ public class PaymentRequestedPublisher {
                 payment.getCurrency(),
                 payment.getDescription()
         );
-        CorrelationData correlationData = new CorrelationData(eventId.toString());
-        OutboxEventEntity outboxEvent = outboxEventService.savePaymentRequested(message);
+        outboxEventService.savePaymentRequested(message);
+        System.out.println("cheguei2");
 
-        rabbitTemplate.convertAndSend(
-                RabbitMqConfig.PAYMENT_EXCHANGE,
-                RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY,
-                message,
-                correlationData
-        );
-        outboxEventService.markPublished(outboxEvent);
     }
 }
