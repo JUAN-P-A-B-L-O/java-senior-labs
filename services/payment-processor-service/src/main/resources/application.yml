@@ -1,0 +1,34 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: payment-processor-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/payment_processor_db}
+    username: ${DB_USERNAME:payment_lab}
+    password: ${DB_PASSWORD:payment_lab}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    listener:
+      simple:
+        default-requeue-rejected: false
+        concurrency: 4
+        max-concurrency: 4
+        prefetch: 1
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2s
+          multiplier: 1
+          max-interval: 2s
+
+payment-processor:
+  authorization-url: https://util.devi.tools/api/v2/authorize

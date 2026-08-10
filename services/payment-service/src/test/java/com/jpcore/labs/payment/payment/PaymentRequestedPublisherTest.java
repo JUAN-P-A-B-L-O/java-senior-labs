@@ -1,0 +1,41 @@
+package com.jpcore.labs.payment.payment;
+
+import com.jpcore.labs.payment.outbox.OutboxEventService;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+class PaymentRequestedPublisherTest {
+
+    @Test
+    void savesPaymentRequestedMessageToOutboxWithEventId() {
+        OutboxEventService outboxEventService = mock(OutboxEventService.class);
+        PaymentRequestedPublisher publisher = new PaymentRequestedPublisher(outboxEventService);
+        PaymentEntity payment = new PaymentEntity(
+                new BigDecimal("100.50"),
+                "BRL",
+                "test payment",
+                PaymentStatus.PROCESSING
+        );
+        UUID paymentId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        ReflectionTestUtils.setField(payment, "id", paymentId);
+        ArgumentCaptor<PaymentRequestedMessage> messageCaptor = ArgumentCaptor.forClass(PaymentRequestedMessage.class);
+
+        publisher.publish(payment);
+
+        verify(outboxEventService).savePaymentRequested(messageCaptor.capture());
+        PaymentRequestedMessage message = messageCaptor.getValue();
+        assertThat(message.eventId()).isNotNull();
+        assertThat(message.paymentId()).isEqualTo(paymentId.toString());
+        assertThat(message.amount()).isEqualByComparingTo("100.50");
+        assertThat(message.currency()).isEqualTo("BRL");
+        assertThat(message.description()).isEqualTo("test payment");
+    }
+}

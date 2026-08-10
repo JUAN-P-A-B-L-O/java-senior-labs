@@ -1,0 +1,14 @@
+package com.jpcore.labs.payment;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableScheduling
+public class PaymentLabApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentLabApplication.class, args);
+    }
+}
