@@ -37,8 +37,18 @@ public class OutboxEventPublisherJob {
                     new CorrelationData(outboxEvent.getEventId().toString())
             );
             outboxEventService.markPublished(outboxEvent);
+            log.info("Result event published. paymentId={} eventId={} eventType={}",
+                    outboxEvent.getAggregateId(),
+                    outboxEvent.getEventId(),
+                    outboxEvent.getEventType()
+            );
         } catch (RuntimeException exception) {
-            log.error("Could not publish processor outbox event. eventId={}", outboxEvent.getEventId(), exception);
+            log.error("Could not publish processor outbox event. paymentId={} eventId={} eventType={}",
+                    outboxEvent.getAggregateId(),
+                    outboxEvent.getEventId(),
+                    outboxEvent.getEventType(),
+                    exception
+            );
         }
     }
 

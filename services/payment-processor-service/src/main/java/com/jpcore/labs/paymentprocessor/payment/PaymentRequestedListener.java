@@ -29,17 +29,29 @@ public class PaymentRequestedListener {
     @RabbitListener(queues = RabbitMqConfig.PAYMENT_PROCESS_QUEUE)
     public void listen(PaymentRequestedMessage message) {
         if (processedEventService.isProcessed(message.eventId())) {
-            log.info("paymentRequested duplicated ignored: {}", message.eventId());
+            log.info("PaymentRequested duplicate ignored. paymentId={} eventId={}",
+                    message.paymentId(),
+                    message.eventId()
+            );
             return;
         }
 
-        log.info("paymentRequested received: {}", message);
+        log.info("PaymentRequested received. paymentId={} eventId={}", message.paymentId(), message.eventId());
         try {
-            paymentAuthorizationService.authorize(message);
-            outboxEventService.savePaymentProcessed(message.eventId(), message.paymentId());
-        } catch (PaymentAuthorizationException exception) {
-            outboxEventService.savePaymentProcessingFailed(message.eventId(), message.paymentId(), exception.getMessage());
+            try {
+                paymentAuthorizationService.authorize(message);
+                outboxEventService.savePaymentProcessed(message.eventId(), message.paymentId());
+            } catch (PaymentAuthorizationException exception) {
+                outboxEventService.savePaymentProcessingFailed(message.eventId(), message.paymentId(), exception.getMessage());
+            }
+            processedEventService.markProcessed(message.eventId());
+        } catch (RuntimeException exception) {
+            log.error("PaymentRequested processing failed. paymentId={} eventId={}",
+                    message.paymentId(),
+                    message.eventId(),
+                    exception
+            );
+            throw exception;
         }
-        processedEventService.markProcessed(message.eventId());
     }
 }

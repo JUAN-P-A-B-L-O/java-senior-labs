@@ -69,8 +69,8 @@ class PaymentAuthorizationServiceTest {
                 .andRespond(withServerError());
 
         assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
-                .isInstanceOf(PaymentAuthorizationException.class)
-                .hasMessage("Payment authorization failed for paymentId=payment-123");
+                .isInstanceOf(PaymentAuthorizationUnavailableException.class)
+                .hasMessage("Payment authorization unavailable for paymentId=payment-123");
 
         server.verify();
     }

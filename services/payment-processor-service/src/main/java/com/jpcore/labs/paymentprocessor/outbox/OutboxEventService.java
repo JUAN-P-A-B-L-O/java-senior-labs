@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +15,8 @@ import java.util.UUID;
 
 @Service
 public class OutboxEventService {
+
+    private static final Logger log = LoggerFactory.getLogger(OutboxEventService.class);
 
     public static final String PAYMENT_PROCESSED = "PaymentProcessed";
     public static final String PAYMENT_PROCESSING_FAILED = "PaymentProcessingFailed";
@@ -28,7 +32,14 @@ public class OutboxEventService {
     @Transactional
     public OutboxEventEntity savePaymentProcessed(UUID requestedEventId, String paymentId) {
         PaymentProcessedMessage message = new PaymentProcessedMessage(UUID.randomUUID(), requestedEventId, paymentId);
-        return save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
+        OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
+        log.info("Result event saved to outbox. paymentId={} eventId={} eventType={} requestedEventId={}",
+                paymentId,
+                outboxEvent.getEventId(),
+                outboxEvent.getEventType(),
+                requestedEventId
+        );
+        return outboxEvent;
     }
 
     @Transactional
@@ -39,7 +50,14 @@ public class OutboxEventService {
                 paymentId,
                 reason
         );
-        return save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSING_FAILED, message);
+        OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSING_FAILED, message);
+        log.info("Result event saved to outbox. paymentId={} eventId={} eventType={} requestedEventId={}",
+                paymentId,
+                outboxEvent.getEventId(),
+                outboxEvent.getEventType(),
+                requestedEventId
+        );
+        return outboxEvent;
     }
 
     @Transactional(readOnly = true)

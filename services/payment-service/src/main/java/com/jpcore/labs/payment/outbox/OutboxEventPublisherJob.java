@@ -40,8 +40,18 @@ public class OutboxEventPublisherJob {
                     correlationData
             );
             outboxEventService.markPublished(outboxEvent);
+            log.info("Outbox event published. paymentId={} eventId={} eventType={}",
+                    outboxEvent.getAggregateId(),
+                    outboxEvent.getEventId(),
+                    outboxEvent.getEventType()
+            );
         } catch (RuntimeException exception) {
-            log.error("Could not publish outbox event. eventId={}", outboxEvent.getEventId(), exception);
+            log.error("Could not publish outbox event. paymentId={} eventId={} eventType={}",
+                    outboxEvent.getAggregateId(),
+                    outboxEvent.getEventId(),
+                    outboxEvent.getEventType(),
+                    exception
+            );
         }
     }
 }

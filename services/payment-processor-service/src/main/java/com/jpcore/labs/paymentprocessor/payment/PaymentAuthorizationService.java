@@ -1,5 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -7,6 +9,8 @@ import org.springframework.web.client.RestClientException;
 
 @Service
 public class PaymentAuthorizationService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentAuthorizationService.class);
 
     private final RestClient restClient;
     private final String authorizationUrl;
@@ -20,6 +24,7 @@ public class PaymentAuthorizationService {
     }
 
     public boolean authorize(PaymentRequestedMessage message) {
+        log.info("Authorization started. paymentId={} eventId={}", message.paymentId(), message.eventId());
         try {
             AuthorizationResponse response = restClient.get()
                     .uri(authorizationUrl)
@@ -27,12 +32,22 @@ public class PaymentAuthorizationService {
                     .body(AuthorizationResponse.class);
 
             if (response != null && response.isAuthorized()) {
+                log.info("Authorization succeeded. paymentId={} eventId={}", message.paymentId(), message.eventId());
                 return true;
             }
 
+            log.warn("Authorization failed. paymentId={} eventId={}", message.paymentId(), message.eventId());
             throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
         } catch (RestClientException exception) {
-            throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId(), exception);
+            log.warn("Authorization unavailable. paymentId={} eventId={} error={}",
+                    message.paymentId(),
+                    message.eventId(),
+                    exception.getMessage()
+            );
+            throw new PaymentAuthorizationUnavailableException(
+                    "Payment authorization unavailable for paymentId=" + message.paymentId(),
+                    exception
+            );
         }
     }
 }

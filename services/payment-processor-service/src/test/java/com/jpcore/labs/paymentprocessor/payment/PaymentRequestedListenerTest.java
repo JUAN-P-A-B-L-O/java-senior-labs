@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -106,6 +107,43 @@ class PaymentRequestedListenerTest {
                 "Payment authorization failed for paymentId=" + PAYMENT_ID
         );
         verify(processedEventService).markProcessed(EVENT_ID);
+    }
+
+    @Test
+    void doesNotPublishFinalResultWhenAuthorizationIsUnavailable() {
+        PaymentAuthorizationService paymentAuthorizationService = mock(PaymentAuthorizationService.class);
+        ProcessedEventService processedEventService = mock(ProcessedEventService.class);
+        OutboxEventService outboxEventService = mock(OutboxEventService.class);
+        PaymentRequestedListener listener = new PaymentRequestedListener(
+                paymentAuthorizationService,
+                processedEventService,
+                outboxEventService
+        );
+        PaymentRequestedMessage message = new PaymentRequestedMessage(
+                EVENT_ID,
+                PAYMENT_ID,
+                BigDecimal.TEN,
+                "BRL",
+                "test payment"
+        );
+        PaymentAuthorizationUnavailableException exception = new PaymentAuthorizationUnavailableException(
+                "Payment authorization unavailable for paymentId=" + PAYMENT_ID,
+                new RuntimeException("certificate expired")
+        );
+        when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
+        when(paymentAuthorizationService.authorize(message)).thenThrow(exception);
+
+        assertThatThrownBy(() -> listener.listen(message))
+                .isSameAs(exception);
+
+        verify(paymentAuthorizationService).authorize(message);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessingFailed(
+                EVENT_ID,
+                PAYMENT_ID,
+                "Payment authorization unavailable for paymentId=" + PAYMENT_ID
+        );
+        verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.jpcore.labs.payment.payment;
 
 import com.jpcore.labs.payment.idempotency.IdempotencyService;
 import com.jpcore.labs.payment.idempotency.IdempotencyEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +19,7 @@ import java.util.Optional;
 @Service
 public class PaymentService {
 
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
     private static final Duration IDEMPOTENCY_EXPIRATION = Duration.ofHours(24);
 
     private final PaymentRepository paymentRepository;
@@ -60,6 +63,8 @@ public class PaymentService {
         );
 
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
+        log.info("Payment created. paymentId={} status={}", savedPayment.getId(), savedPayment.getStatus());
+
         idempotencyService.complete(idempotency, savedPayment.getId());
       
         paymentRequestedPublisher.publish(savedPayment);
@@ -81,6 +86,13 @@ public class PaymentService {
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
         if (payment.getStatus() == PaymentStatus.PROCESSING) {
             payment.markCompleted();
+            log.info("Payment status updated. paymentId={} status={}", payment.getId(), payment.getStatus());
+        } else {
+            log.warn("Payment status update ignored. paymentId={} status={} requestedStatus={}",
+                    payment.getId(),
+                    payment.getStatus(),
+                    PaymentStatus.COMPLETED
+            );
         }
     }
 
@@ -90,6 +102,13 @@ public class PaymentService {
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
         if (payment.getStatus() == PaymentStatus.PROCESSING) {
             payment.markFailed();
+            log.info("Payment status updated. paymentId={} status={}", payment.getId(), payment.getStatus());
+        } else {
+            log.warn("Payment status update ignored. paymentId={} status={} requestedStatus={}",
+                    payment.getId(),
+                    payment.getStatus(),
+                    PaymentStatus.FAILED
+            );
         }
     }
 
