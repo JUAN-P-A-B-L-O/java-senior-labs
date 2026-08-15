@@ -31,4 +31,4 @@ spring:
           max-interval: 2s
 
 payment-processor:
-  authorization-url: https://util.devi.tools/api/v2/authorize
+  authorization-url: https://httpbin.org/status/200,500
