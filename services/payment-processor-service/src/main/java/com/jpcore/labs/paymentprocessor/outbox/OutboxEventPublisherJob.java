@@ -1,12 +1,16 @@
 package com.jpcore.labs.paymentprocessor.outbox;
 
 import com.jpcore.labs.paymentprocessor.config.RabbitMqConfig;
+import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
+import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 public class OutboxEventPublisherJob {
@@ -37,8 +41,9 @@ public class OutboxEventPublisherJob {
                     new CorrelationData(outboxEvent.getEventId().toString())
             );
             outboxEventService.markPublished(outboxEvent);
-            log.info("Result event published. paymentId={} eventId={} eventType={}",
+            log.info("Result event published. paymentId={} traceId={} eventId={} eventType={}",
                     outboxEvent.getAggregateId(),
+                    traceId(message),
                     outboxEvent.getEventId(),
                     outboxEvent.getEventType()
             );
@@ -60,5 +65,15 @@ public class OutboxEventPublisherJob {
             return RabbitMqConfig.PAYMENT_PROCESSING_FAILED_ROUTING_KEY;
         }
         throw new IllegalStateException("Unknown outbox event type: " + outboxEvent.getEventType());
+    }
+
+    private UUID traceId(Object message) {
+        if (message instanceof PaymentProcessedMessage paymentProcessedMessage) {
+            return paymentProcessedMessage.traceId();
+        }
+        if (message instanceof PaymentProcessingFailedMessage paymentProcessingFailedMessage) {
+            return paymentProcessingFailedMessage.traceId();
+        }
+        return null;
     }
 }

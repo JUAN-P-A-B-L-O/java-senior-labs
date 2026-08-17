@@ -88,6 +88,7 @@ class RabbitMqConfigTest {
                 (Jackson2JsonMessageConverter) rabbitMqConfig.jsonMessageConverter();
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
                 "22222222-2222-2222-2222-222222222222",
                 new BigDecimal("100.50"),
                 "BRL",

@@ -80,6 +80,7 @@ class OutboxEventPublisherJobTest {
     private PaymentRequestedMessage paymentRequestedMessage(OutboxEventEntity outboxEvent) {
         return new PaymentRequestedMessage(
                 outboxEvent.getEventId(),
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
                 outboxEvent.getAggregateId().toString(),
                 new BigDecimal("100.50"),
                 "BRL",

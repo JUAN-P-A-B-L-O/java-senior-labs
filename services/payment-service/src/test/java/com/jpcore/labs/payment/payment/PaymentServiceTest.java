@@ -59,7 +59,7 @@ class PaymentServiceTest {
         assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.COMPLETED);
         assertThat(createdIdempotency.getRequestBodyHash()).hasSize(64);
         assertThat(createdIdempotency.getPaymentId()).isEqualTo(UUID.fromString(response.id()));
-        verify(paymentRequestedPublisher).publish(any(PaymentEntity.class));
+        verify(paymentRequestedPublisher).publish(any(PaymentEntity.class), any(UUID.class));
     }
 
     @Test
@@ -74,7 +74,7 @@ class PaymentServiceTest {
         PaymentResponse secondResponse = paymentService.createPayment(request, "completed-payment-key");
 
         assertThat(secondResponse).isEqualTo(firstResponse);
-        verify(paymentRequestedPublisher, times(1)).publish(any(PaymentEntity.class));
+        verify(paymentRequestedPublisher, times(1)).publish(any(PaymentEntity.class), any(UUID.class));
     }
 
     @Test

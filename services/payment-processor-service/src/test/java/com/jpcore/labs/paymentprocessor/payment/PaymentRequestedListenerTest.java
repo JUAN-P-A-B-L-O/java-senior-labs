@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 class PaymentRequestedListenerTest {
 
     private static final UUID EVENT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID TRACE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final String PAYMENT_ID = "22222222-2222-2222-2222-222222222222";
 
     @Test
@@ -34,6 +35,7 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
@@ -45,7 +47,7 @@ class PaymentRequestedListenerTest {
         listener.listen(message);
 
         verify(paymentAuthorizationService).authorize(message);
-        verify(outboxEventService).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 
@@ -61,6 +63,7 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
@@ -72,6 +75,7 @@ class PaymentRequestedListenerTest {
 
         verify(paymentAuthorizationService, never()).authorize(message);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 
@@ -87,6 +91,7 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
@@ -103,6 +108,7 @@ class PaymentRequestedListenerTest {
         verify(paymentAuthorizationService).authorize(message);
         verify(outboxEventService).savePaymentProcessingFailed(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 "Payment authorization failed for paymentId=" + PAYMENT_ID
         );
@@ -121,6 +127,7 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
@@ -138,8 +145,15 @@ class PaymentRequestedListenerTest {
 
         verify(paymentAuthorizationService).authorize(message);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
         verify(outboxEventService, never()).savePaymentProcessingFailed(
                 EVENT_ID,
+                PAYMENT_ID,
+                "Payment authorization unavailable for paymentId=" + PAYMENT_ID
+        );
+        verify(outboxEventService, never()).savePaymentProcessingFailed(
+                EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 "Payment authorization unavailable for paymentId=" + PAYMENT_ID
         );
@@ -163,8 +177,9 @@ class PaymentRequestedListenerTest {
         Message amqpMessage = new Message(
                 """
                         {
-                          "eventId": "11111111-1111-1111-1111-111111111111",
-                          "paymentId": "22222222-2222-2222-2222-222222222222",
+	                          "eventId": "11111111-1111-1111-1111-111111111111",
+	                          "traceId": "33333333-3333-3333-3333-333333333333",
+	                          "paymentId": "22222222-2222-2222-2222-222222222222",
                           "amount": 10,
                           "currency": "BRL",
                           "description": "test payment"
@@ -179,7 +194,7 @@ class PaymentRequestedListenerTest {
         listener.listen(message);
 
         verify(paymentAuthorizationService).authorize(message);
-        verify(outboxEventService).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 }

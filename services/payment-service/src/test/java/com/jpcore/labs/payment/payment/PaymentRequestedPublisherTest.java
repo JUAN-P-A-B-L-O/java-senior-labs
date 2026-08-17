@@ -25,14 +25,16 @@ class PaymentRequestedPublisherTest {
                 PaymentStatus.PROCESSING
         );
         UUID paymentId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        UUID traceId = UUID.fromString("33333333-3333-3333-3333-333333333333");
         ReflectionTestUtils.setField(payment, "id", paymentId);
         ArgumentCaptor<PaymentRequestedMessage> messageCaptor = ArgumentCaptor.forClass(PaymentRequestedMessage.class);
 
-        publisher.publish(payment);
+        publisher.publish(payment, traceId);
 
         verify(outboxEventService).savePaymentRequested(messageCaptor.capture());
         PaymentRequestedMessage message = messageCaptor.getValue();
         assertThat(message.eventId()).isNotNull();
+        assertThat(message.traceId()).isEqualTo(traceId);
         assertThat(message.paymentId()).isEqualTo(paymentId.toString());
         assertThat(message.amount()).isEqualByComparingTo("100.50");
         assertThat(message.currency()).isEqualTo("BRL");

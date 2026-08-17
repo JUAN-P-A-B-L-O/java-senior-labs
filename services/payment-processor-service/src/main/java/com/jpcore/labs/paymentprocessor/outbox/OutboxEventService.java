@@ -31,10 +31,16 @@ public class OutboxEventService {
 
     @Transactional
     public OutboxEventEntity savePaymentProcessed(UUID requestedEventId, String paymentId) {
-        PaymentProcessedMessage message = new PaymentProcessedMessage(UUID.randomUUID(), requestedEventId, paymentId);
+        return savePaymentProcessed(requestedEventId, null, paymentId);
+    }
+
+    @Transactional
+    public OutboxEventEntity savePaymentProcessed(UUID requestedEventId, UUID traceId, String paymentId) {
+        PaymentProcessedMessage message = new PaymentProcessedMessage(UUID.randomUUID(), traceId, requestedEventId, paymentId);
         OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
-        log.info("Result event saved to outbox. paymentId={} eventId={} eventType={} requestedEventId={}",
+        log.info("Result event saved to outbox. paymentId={} traceId={} eventId={} eventType={} requestedEventId={}",
                 paymentId,
+                traceId,
                 outboxEvent.getEventId(),
                 outboxEvent.getEventType(),
                 requestedEventId
@@ -44,15 +50,22 @@ public class OutboxEventService {
 
     @Transactional
     public OutboxEventEntity savePaymentProcessingFailed(UUID requestedEventId, String paymentId, String reason) {
+        return savePaymentProcessingFailed(requestedEventId, null, paymentId, reason);
+    }
+
+    @Transactional
+    public OutboxEventEntity savePaymentProcessingFailed(UUID requestedEventId, UUID traceId, String paymentId, String reason) {
         PaymentProcessingFailedMessage message = new PaymentProcessingFailedMessage(
                 UUID.randomUUID(),
+                traceId,
                 requestedEventId,
                 paymentId,
                 reason
         );
         OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSING_FAILED, message);
-        log.info("Result event saved to outbox. paymentId={} eventId={} eventType={} requestedEventId={}",
+        log.info("Result event saved to outbox. paymentId={} traceId={} eventId={} eventType={} requestedEventId={}",
                 paymentId,
+                traceId,
                 outboxEvent.getEventId(),
                 outboxEvent.getEventType(),
                 requestedEventId

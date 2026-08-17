@@ -40,8 +40,9 @@ public class OutboxEventPublisherJob {
                     correlationData
             );
             outboxEventService.markPublished(outboxEvent);
-            log.info("Outbox event published. paymentId={} eventId={} eventType={}",
+            log.info("Outbox event published. paymentId={} traceId={} eventId={} eventType={}",
                     outboxEvent.getAggregateId(),
+                    message.traceId(),
                     outboxEvent.getEventId(),
                     outboxEvent.getEventType()
             );

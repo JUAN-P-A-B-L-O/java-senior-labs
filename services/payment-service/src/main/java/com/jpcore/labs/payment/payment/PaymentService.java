@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class PaymentService {
@@ -54,6 +55,7 @@ public class PaymentService {
                 requestBodyHash,
                 Instant.now().plus(IDEMPOTENCY_EXPIRATION)
         );
+        UUID traceId = UUID.randomUUID();
 
         PaymentEntity payment = new PaymentEntity(
                 request.amount(),
@@ -63,11 +65,15 @@ public class PaymentService {
         );
 
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
-        log.info("Payment created. paymentId={} status={}", savedPayment.getId(), savedPayment.getStatus());
+        log.info("Payment created. paymentId={} traceId={} status={}",
+                savedPayment.getId(),
+                traceId,
+                savedPayment.getStatus()
+        );
 
         idempotencyService.complete(idempotency, savedPayment.getId());
       
-        paymentRequestedPublisher.publish(savedPayment);
+        paymentRequestedPublisher.publish(savedPayment, traceId);
 
         return toResponse(savedPayment);
     }
@@ -82,14 +88,24 @@ public class PaymentService {
 
     @Transactional
     public void completePayment(String paymentId) {
+        completePayment(paymentId, null);
+    }
+
+    @Transactional
+    public void completePayment(String paymentId, UUID traceId) {
         PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
         if (payment.getStatus() == PaymentStatus.PROCESSING) {
             payment.markCompleted();
-            log.info("Payment status updated. paymentId={} status={}", payment.getId(), payment.getStatus());
-        } else {
-            log.warn("Payment status update ignored. paymentId={} status={} requestedStatus={}",
+            log.info("Payment status updated. paymentId={} traceId={} status={}",
                     payment.getId(),
+                    traceId,
+                    payment.getStatus()
+            );
+        } else {
+            log.warn("Payment status update ignored. paymentId={} traceId={} status={} requestedStatus={}",
+                    payment.getId(),
+                    traceId,
                     payment.getStatus(),
                     PaymentStatus.COMPLETED
             );
@@ -98,14 +114,24 @@ public class PaymentService {
 
     @Transactional
     public void failPayment(String paymentId) {
+        failPayment(paymentId, null);
+    }
+
+    @Transactional
+    public void failPayment(String paymentId, UUID traceId) {
         PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
         if (payment.getStatus() == PaymentStatus.PROCESSING) {
             payment.markFailed();
-            log.info("Payment status updated. paymentId={} status={}", payment.getId(), payment.getStatus());
-        } else {
-            log.warn("Payment status update ignored. paymentId={} status={} requestedStatus={}",
+            log.info("Payment status updated. paymentId={} traceId={} status={}",
                     payment.getId(),
+                    traceId,
+                    payment.getStatus()
+            );
+        } else {
+            log.warn("Payment status update ignored. paymentId={} traceId={} status={} requestedStatus={}",
+                    payment.getId(),
+                    traceId,
                     payment.getStatus(),
                     PaymentStatus.FAILED
             );

@@ -19,16 +19,21 @@ public class PaymentRequestedPublisher {
     }
 
     public void publish(PaymentEntity payment) {
+        publish(payment, UUID.randomUUID());
+    }
+
+    public void publish(PaymentEntity payment, UUID traceId) {
         UUID eventId = UUID.randomUUID();
 
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 eventId,
+                traceId,
                 payment.getId().toString(),
                 payment.getAmount(),
                 payment.getCurrency(),
                 payment.getDescription()
         );
         outboxEventService.savePaymentRequested(message);
-        log.info("PaymentRequested saved to outbox. paymentId={} eventId={}", payment.getId(), eventId);
+        log.info("PaymentRequested saved to outbox. paymentId={} traceId={} eventId={}", payment.getId(), traceId, eventId);
     }
 }

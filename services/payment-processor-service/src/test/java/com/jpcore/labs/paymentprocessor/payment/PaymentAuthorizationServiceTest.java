@@ -78,6 +78,7 @@ class PaymentAuthorizationServiceTest {
     private PaymentRequestedMessage paymentRequestedMessage() {
         return new PaymentRequestedMessage(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
                 "payment-123",
                 BigDecimal.TEN,
                 "BRL",

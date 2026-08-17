@@ -24,7 +24,11 @@ public class PaymentAuthorizationService {
     }
 
     public boolean authorize(PaymentRequestedMessage message) {
-        log.info("Authorization started. paymentId={} eventId={}", message.paymentId(), message.eventId());
+        log.info("Authorization started. paymentId={} traceId={} eventId={}",
+                message.paymentId(),
+                message.traceId(),
+                message.eventId()
+        );
         try {
             AuthorizationResponse response = restClient.get()
                     .uri(authorizationUrl)
@@ -32,15 +36,24 @@ public class PaymentAuthorizationService {
                     .body(AuthorizationResponse.class);
 
             if (response != null && response.isAuthorized()) {
-                log.info("Authorization succeeded. paymentId={} eventId={}", message.paymentId(), message.eventId());
+                log.info("Authorization succeeded. paymentId={} traceId={} eventId={}",
+                        message.paymentId(),
+                        message.traceId(),
+                        message.eventId()
+                );
                 return true;
             }
 
-            log.warn("Authorization failed. paymentId={} eventId={}", message.paymentId(), message.eventId());
+            log.warn("Authorization failed. paymentId={} traceId={} eventId={}",
+                    message.paymentId(),
+                    message.traceId(),
+                    message.eventId()
+            );
             throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
         } catch (RestClientException exception) {
-            log.warn("Authorization unavailable. paymentId={} eventId={} error={}",
+            log.warn("Authorization unavailable. paymentId={} traceId={} eventId={} error={}",
                     message.paymentId(),
+                    message.traceId(),
                     message.eventId(),
                     exception.getMessage()
             );
