@@ -23,3 +23,7 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+
+logging:
+  pattern:
+    level: "%5p traceId=%X{traceId} paymentId=%X{paymentId}"

@@ -28,41 +28,30 @@ public class PaymentRequestedListener {
 
     @RabbitListener(queues = RabbitMqConfig.PAYMENT_PROCESS_QUEUE)
     public void listen(PaymentRequestedMessage message) {
-        if (processedEventService.isProcessed(message.eventId())) {
-            log.info("PaymentRequested duplicate ignored. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
-                    message.eventId()
-            );
-            return;
-        }
-
-        log.info("PaymentRequested received. paymentId={} traceId={} eventId={}",
-                message.paymentId(),
-                message.traceId(),
-                message.eventId()
-        );
-        try {
-            try {
-                paymentAuthorizationService.authorize(message);
-                outboxEventService.savePaymentProcessed(message.eventId(), message.traceId(), message.paymentId());
-            } catch (PaymentAuthorizationException exception) {
-                outboxEventService.savePaymentProcessingFailed(
-                        message.eventId(),
-                        message.traceId(),
-                        message.paymentId(),
-                        exception.getMessage()
-                );
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+            if (processedEventService.isProcessed(message.eventId())) {
+                log.info("PaymentRequested duplicate ignored. eventId={}", message.eventId());
+                return;
             }
-            processedEventService.markProcessed(message.eventId());
-        } catch (RuntimeException exception) {
-            log.error("PaymentRequested processing failed. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
-                    message.eventId(),
-                    exception
-            );
-            throw exception;
+
+            log.info("PaymentRequested received. eventId={}", message.eventId());
+            try {
+                try {
+                    paymentAuthorizationService.authorize(message);
+                    outboxEventService.savePaymentProcessed(message.eventId(), message.traceId(), message.paymentId());
+                } catch (PaymentAuthorizationException exception) {
+                    outboxEventService.savePaymentProcessingFailed(
+                            message.eventId(),
+                            message.traceId(),
+                            message.paymentId(),
+                            exception.getMessage()
+                    );
+                }
+                processedEventService.markProcessed(message.eventId());
+            } catch (RuntimeException exception) {
+                log.error("PaymentRequested processing failed. eventId={}", message.eventId(), exception);
+                throw exception;
+            }
         }
     }
 }

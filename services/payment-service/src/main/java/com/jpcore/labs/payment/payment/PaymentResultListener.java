@@ -23,63 +23,45 @@ public class PaymentResultListener {
 
     @RabbitHandler
     public void listen(PaymentProcessedMessage message) {
-        if (processedEventService.isProcessed(message.eventId())) {
-            log.info("PaymentProcessed duplicate ignored. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
-                    message.eventId()
-            );
-            return;
-        }
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+            if (processedEventService.isProcessed(message.eventId())) {
+                log.info("PaymentProcessed duplicate ignored. eventId={}", message.eventId());
+                return;
+            }
 
-        log.info("PaymentProcessed received. paymentId={} traceId={} eventId={} requestedEventId={}",
-                message.paymentId(),
-                message.traceId(),
-                message.eventId(),
-                message.requestedEventId()
-        );
-        try {
-            paymentService.completePayment(message.paymentId(), message.traceId());
-            processedEventService.markProcessed(message.eventId());
-        } catch (RuntimeException exception) {
-            log.error("PaymentProcessed handling failed. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
+            log.info("PaymentProcessed received. eventId={} requestedEventId={}",
                     message.eventId(),
-                    exception
+                    message.requestedEventId()
             );
-            throw exception;
+            try {
+                paymentService.completePayment(message.paymentId(), message.traceId());
+                processedEventService.markProcessed(message.eventId());
+            } catch (RuntimeException exception) {
+                log.error("PaymentProcessed handling failed. eventId={}", message.eventId(), exception);
+                throw exception;
+            }
         }
     }
 
     @RabbitHandler
     public void listen(PaymentProcessingFailedMessage message) {
-        if (processedEventService.isProcessed(message.eventId())) {
-            log.info("PaymentProcessingFailed duplicate ignored. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
-                    message.eventId()
-            );
-            return;
-        }
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+            if (processedEventService.isProcessed(message.eventId())) {
+                log.info("PaymentProcessingFailed duplicate ignored. eventId={}", message.eventId());
+                return;
+            }
 
-        log.info("PaymentProcessingFailed received. paymentId={} traceId={} eventId={} requestedEventId={}",
-                message.paymentId(),
-                message.traceId(),
-                message.eventId(),
-                message.requestedEventId()
-        );
-        try {
-            paymentService.failPayment(message.paymentId(), message.traceId());
-            processedEventService.markProcessed(message.eventId());
-        } catch (RuntimeException exception) {
-            log.error("PaymentProcessingFailed handling failed. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
+            log.info("PaymentProcessingFailed received. eventId={} requestedEventId={}",
                     message.eventId(),
-                    exception
+                    message.requestedEventId()
             );
-            throw exception;
+            try {
+                paymentService.failPayment(message.paymentId(), message.traceId());
+                processedEventService.markProcessed(message.eventId());
+            } catch (RuntimeException exception) {
+                log.error("PaymentProcessingFailed handling failed. eventId={}", message.eventId(), exception);
+                throw exception;
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.jpcore.labs.payment.outbox;
 
 import com.jpcore.labs.payment.config.RabbitMqConfig;
+import com.jpcore.labs.payment.payment.PaymentLogContext;
 import com.jpcore.labs.payment.payment.PaymentRequestedMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,30 +30,31 @@ public class OutboxEventPublisherJob {
     }
 
     private void publish(OutboxEventEntity outboxEvent) {
-        try {
-            PaymentRequestedMessage message = outboxEventService.toPaymentRequestedMessage(outboxEvent);
-            CorrelationData correlationData = new CorrelationData(outboxEvent.getEventId().toString());
+        try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
+            try {
+                PaymentRequestedMessage message = outboxEventService.toPaymentRequestedMessage(outboxEvent);
+                try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(message.traceId(), outboxEvent.getAggregateId())) {
+                    CorrelationData correlationData = new CorrelationData(outboxEvent.getEventId().toString());
 
-            rabbitTemplate.convertAndSend(
-                    RabbitMqConfig.PAYMENT_EXCHANGE,
-                    RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY,
-                    message,
-                    correlationData
-            );
-            outboxEventService.markPublished(outboxEvent);
-            log.info("Outbox event published. paymentId={} traceId={} eventId={} eventType={}",
-                    outboxEvent.getAggregateId(),
-                    message.traceId(),
-                    outboxEvent.getEventId(),
-                    outboxEvent.getEventType()
-            );
-        } catch (RuntimeException exception) {
-            log.error("Could not publish outbox event. paymentId={} eventId={} eventType={}",
-                    outboxEvent.getAggregateId(),
-                    outboxEvent.getEventId(),
-                    outboxEvent.getEventType(),
-                    exception
-            );
+                    rabbitTemplate.convertAndSend(
+                            RabbitMqConfig.PAYMENT_EXCHANGE,
+                            RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY,
+                            message,
+                            correlationData
+                    );
+                    outboxEventService.markPublished(outboxEvent);
+                    log.info("Outbox event published. eventId={} eventType={}",
+                            outboxEvent.getEventId(),
+                            outboxEvent.getEventType()
+                    );
+                }
+            } catch (RuntimeException exception) {
+                log.error("Could not publish outbox event. eventId={} eventType={}",
+                        outboxEvent.getEventId(),
+                        outboxEvent.getEventType(),
+                        exception
+                );
+            }
         }
     }
 }

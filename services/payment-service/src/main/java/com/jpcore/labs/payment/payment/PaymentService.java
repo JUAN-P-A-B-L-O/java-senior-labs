@@ -65,15 +65,13 @@ public class PaymentService {
         );
 
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
-        log.info("Payment created. paymentId={} traceId={} status={}",
-                savedPayment.getId(),
-                traceId,
-                savedPayment.getStatus()
-        );
+        try (PaymentLogContext ignored = PaymentLogContext.with(traceId, savedPayment.getId())) {
+            log.info("Payment created. status={}", savedPayment.getStatus());
 
-        idempotencyService.complete(idempotency, savedPayment.getId());
-      
-        paymentRequestedPublisher.publish(savedPayment, traceId);
+            idempotencyService.complete(idempotency, savedPayment.getId());
+
+            paymentRequestedPublisher.publish(savedPayment, traceId);
+        }
 
         return toResponse(savedPayment);
     }
@@ -93,22 +91,18 @@ public class PaymentService {
 
     @Transactional
     public void completePayment(String paymentId, UUID traceId) {
-        PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
-                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
-        if (payment.getStatus() == PaymentStatus.PROCESSING) {
-            payment.markCompleted();
-            log.info("Payment status updated. paymentId={} traceId={} status={}",
-                    payment.getId(),
-                    traceId,
-                    payment.getStatus()
-            );
-        } else {
-            log.warn("Payment status update ignored. paymentId={} traceId={} status={} requestedStatus={}",
-                    payment.getId(),
-                    traceId,
-                    payment.getStatus(),
-                    PaymentStatus.COMPLETED
-            );
+        try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
+            PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
+                    .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+            if (payment.getStatus() == PaymentStatus.PROCESSING) {
+                payment.markCompleted();
+                log.info("Payment status updated. status={}", payment.getStatus());
+            } else {
+                log.warn("Payment status update ignored. status={} requestedStatus={}",
+                        payment.getStatus(),
+                        PaymentStatus.COMPLETED
+                );
+            }
         }
     }
 
@@ -119,22 +113,18 @@ public class PaymentService {
 
     @Transactional
     public void failPayment(String paymentId, UUID traceId) {
-        PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
-                .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
-        if (payment.getStatus() == PaymentStatus.PROCESSING) {
-            payment.markFailed();
-            log.info("Payment status updated. paymentId={} traceId={} status={}",
-                    payment.getId(),
-                    traceId,
-                    payment.getStatus()
-            );
-        } else {
-            log.warn("Payment status update ignored. paymentId={} traceId={} status={} requestedStatus={}",
-                    payment.getId(),
-                    traceId,
-                    payment.getStatus(),
-                    PaymentStatus.FAILED
-            );
+        try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
+            PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
+                    .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+            if (payment.getStatus() == PaymentStatus.PROCESSING) {
+                payment.markFailed();
+                log.info("Payment status updated. status={}", payment.getStatus());
+            } else {
+                log.warn("Payment status update ignored. status={} requestedStatus={}",
+                        payment.getStatus(),
+                        PaymentStatus.FAILED
+                );
+            }
         }
     }
 

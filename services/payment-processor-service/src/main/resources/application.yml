@@ -29,3 +29,7 @@ spring:
           initial-interval: 2s
           multiplier: 1
           max-interval: 2s
+
+logging:
+  pattern:
+    level: "%5p traceId=%X{traceId} paymentId=%X{paymentId}"

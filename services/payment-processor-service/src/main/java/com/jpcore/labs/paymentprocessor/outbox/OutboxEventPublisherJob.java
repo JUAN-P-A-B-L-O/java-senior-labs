@@ -1,6 +1,7 @@
 package com.jpcore.labs.paymentprocessor.outbox;
 
 import com.jpcore.labs.paymentprocessor.config.RabbitMqConfig;
+import com.jpcore.labs.paymentprocessor.payment.PaymentLogContext;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
 import org.slf4j.Logger;
@@ -32,28 +33,29 @@ public class OutboxEventPublisherJob {
     }
 
     private void publish(OutboxEventEntity outboxEvent) {
-        try {
-            Object message = outboxEventService.toMessage(outboxEvent);
-            rabbitTemplate.convertAndSend(
-                    RabbitMqConfig.PAYMENT_EXCHANGE,
-                    routingKey(outboxEvent),
-                    message,
-                    new CorrelationData(outboxEvent.getEventId().toString())
-            );
-            outboxEventService.markPublished(outboxEvent);
-            log.info("Result event published. paymentId={} traceId={} eventId={} eventType={}",
-                    outboxEvent.getAggregateId(),
-                    traceId(message),
-                    outboxEvent.getEventId(),
-                    outboxEvent.getEventType()
-            );
-        } catch (RuntimeException exception) {
-            log.error("Could not publish processor outbox event. paymentId={} eventId={} eventType={}",
-                    outboxEvent.getAggregateId(),
-                    outboxEvent.getEventId(),
-                    outboxEvent.getEventType(),
-                    exception
-            );
+        try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
+            try {
+                Object message = outboxEventService.toMessage(outboxEvent);
+                try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(traceId(message), outboxEvent.getAggregateId())) {
+                    rabbitTemplate.convertAndSend(
+                            RabbitMqConfig.PAYMENT_EXCHANGE,
+                            routingKey(outboxEvent),
+                            message,
+                            new CorrelationData(outboxEvent.getEventId().toString())
+                    );
+                    outboxEventService.markPublished(outboxEvent);
+                    log.info("Result event published. eventId={} eventType={}",
+                            outboxEvent.getEventId(),
+                            outboxEvent.getEventType()
+                    );
+                }
+            } catch (RuntimeException exception) {
+                log.error("Could not publish processor outbox event. eventId={} eventType={}",
+                        outboxEvent.getEventId(),
+                        outboxEvent.getEventType(),
+                        exception
+                );
+            }
         }
     }
 

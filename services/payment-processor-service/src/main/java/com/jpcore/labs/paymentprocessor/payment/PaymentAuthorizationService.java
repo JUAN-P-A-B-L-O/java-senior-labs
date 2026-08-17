@@ -23,26 +23,16 @@ public class PaymentAuthorizationService {
     }
 
     public boolean authorize(PaymentRequestedMessage message) {
-        log.info("Authorization started. paymentId={} traceId={} eventId={}",
-                message.paymentId(),
-                message.traceId(),
-                message.eventId()
-        );
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+            log.info("Authorization started. eventId={}", message.eventId());
 
-        if (authorizationDecision.getAsBoolean()) {
-            log.info("Authorization succeeded. paymentId={} traceId={} eventId={}",
-                    message.paymentId(),
-                    message.traceId(),
-                    message.eventId()
-            );
-            return true;
+            if (authorizationDecision.getAsBoolean()) {
+                log.info("Authorization succeeded. eventId={}", message.eventId());
+                return true;
+            }
+
+            log.warn("Authorization failed. eventId={}", message.eventId());
+            throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
         }
-
-        log.warn("Authorization failed. paymentId={} traceId={} eventId={}",
-                message.paymentId(),
-                message.traceId(),
-                message.eventId()
-        );
-        throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
     }
 }

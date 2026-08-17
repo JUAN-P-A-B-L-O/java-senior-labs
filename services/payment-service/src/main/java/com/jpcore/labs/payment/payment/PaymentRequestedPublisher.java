@@ -34,6 +34,6 @@ public class PaymentRequestedPublisher {
                 payment.getDescription()
         );
         outboxEventService.savePaymentRequested(message);
-        log.info("PaymentRequested saved to outbox. paymentId={} traceId={} eventId={}", payment.getId(), traceId, eventId);
+        log.info("PaymentRequested saved to outbox. eventId={}", eventId);
     }
 }
