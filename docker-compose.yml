@@ -28,5 +28,65 @@ services:
       timeout: 5s
       retries: 5
 
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: payment-lab-loki
+    command: -config.file=/etc/loki/loki-config.yml
+    networks:
+      - observability
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./observability/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - payment_lab_loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: payment-lab-grafana
+    networks:
+      - observability
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - payment_lab_grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: payment-lab-alloy
+    networks:
+      - observability
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./logs:/var/log/payment-lab:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+
 volumes:
   payment_lab_postgres_data:
+  payment_lab_loki_data:
+  payment_lab_grafana_data:
+
+networks:
+  observability:
+    name: payment-lab-observability

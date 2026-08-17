@@ -32,6 +32,26 @@ The application connects to PostgreSQL with these defaults:
 - `DB_USERNAME=payment_lab`
 - `DB_PASSWORD=payment_lab`
 
+## Observability
+
+The local observability stack is organized under `observability/`:
+
+- Grafana: `http://127.0.0.1:3000`
+- Loki: `http://127.0.0.1:3100`
+- Alloy: `http://127.0.0.1:12345`
+
+Start with Docker Compose when available:
+
+```bash
+GRAFANA_ADMIN_PASSWORD=<strong-password> docker compose up -d loki grafana alloy
+```
+
+Alloy collects Docker logs for the `payment-lab-*` containers and Spring service logs from `logs/`.
+The Spring services write logs to:
+
+- `logs/payment-service.log`
+- `logs/payment-processor-service.log`
+
 ## Test
 
 ```bash

@@ -25,5 +25,7 @@ spring:
     enabled: true
 
 logging:
+  file:
+    name: ${LOG_FILE:logs/payment-service.log}
   pattern:
     level: "%5p traceId=%X{traceId} paymentId=%X{paymentId}"

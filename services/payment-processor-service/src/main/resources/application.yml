@@ -31,5 +31,7 @@ spring:
           max-interval: 2s
 
 logging:
+  file:
+    name: ${LOG_FILE:logs/payment-processor-service.log}
   pattern:
     level: "%5p traceId=%X{traceId} paymentId=%X{paymentId}"
