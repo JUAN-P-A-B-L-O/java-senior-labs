@@ -116,7 +116,7 @@ class PaymentRequestedListenerTest {
     }
 
     @Test
-    void doesNotPublishFinalResultWhenAuthorizationIsUnavailable() {
+    void doesNotPublishFinalResultWhenUnexpectedAuthorizationErrorOccurs() {
         PaymentAuthorizationService paymentAuthorizationService = mock(PaymentAuthorizationService.class);
         ProcessedEventService processedEventService = mock(ProcessedEventService.class);
         OutboxEventService outboxEventService = mock(OutboxEventService.class);
@@ -133,10 +133,7 @@ class PaymentRequestedListenerTest {
                 "BRL",
                 "test payment"
         );
-        PaymentAuthorizationUnavailableException exception = new PaymentAuthorizationUnavailableException(
-                "Payment authorization unavailable for paymentId=" + PAYMENT_ID,
-                new RuntimeException("certificate expired")
-        );
+        RuntimeException exception = new RuntimeException("Unexpected authorization error");
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
         when(paymentAuthorizationService.authorize(message)).thenThrow(exception);
 
@@ -149,13 +146,13 @@ class PaymentRequestedListenerTest {
         verify(outboxEventService, never()).savePaymentProcessingFailed(
                 EVENT_ID,
                 PAYMENT_ID,
-                "Payment authorization unavailable for paymentId=" + PAYMENT_ID
+                "Unexpected authorization error"
         );
         verify(outboxEventService, never()).savePaymentProcessingFailed(
                 EVENT_ID,
                 TRACE_ID,
                 PAYMENT_ID,
-                "Payment authorization unavailable for paymentId=" + PAYMENT_ID
+                "Unexpected authorization error"
         );
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }

@@ -29,6 +29,3 @@ spring:
           initial-interval: 2s
           multiplier: 1
           max-interval: 2s
-
-payment-processor:
-  authorization-url: https://httpbin.org/status/200,500

@@ -23,6 +23,3 @@ spring:
           initial-interval: 2s
           multiplier: 1
           max-interval: 2s
-
-payment-processor:
-  authorization-url: https://util.devi.tools/api/v2/authorize
