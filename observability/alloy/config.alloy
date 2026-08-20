@@ -39,6 +39,14 @@ local.file_match "spring_services" {
       __path__ = "/var/log/payment-lab/payment-processor-service/*.log",
       service  = "payment-processor-service",
     },
+    {
+      __path__ = "/var/log/payment-lab/payment-service.log",
+      service  = "payment-service",
+    },
+    {
+      __path__ = "/var/log/payment-lab/payment-processor-service.log",
+      service  = "payment-processor-service",
+    },
   ]
 }
 
