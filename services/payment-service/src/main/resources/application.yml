@@ -26,6 +26,4 @@ spring:
 
 logging:
   file:
-    name: ${LOG_FILE:logs/payment-service.log}
-  pattern:
-    level: "%5p traceId=%X{traceId} paymentId=%X{paymentId}"
+    path: ${LOG_DIR:../../logs/payment-service}

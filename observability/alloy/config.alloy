@@ -32,11 +32,11 @@ loki.source.docker "payment_lab" {
 local.file_match "spring_services" {
   path_targets = [
     {
-      __path__ = "/var/log/payment-lab/payment-service.log",
+      __path__ = "/var/log/payment-lab/payment-service/*.log",
       service  = "payment-service",
     },
     {
-      __path__ = "/var/log/payment-lab/payment-processor-service.log",
+      __path__ = "/var/log/payment-lab/payment-processor-service/*.log",
       service  = "payment-processor-service",
     },
   ]

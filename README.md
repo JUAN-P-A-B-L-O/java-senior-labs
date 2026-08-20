@@ -47,10 +47,14 @@ GRAFANA_ADMIN_PASSWORD=<strong-password> docker compose up -d loki grafana alloy
 ```
 
 Alloy collects Docker logs for the `payment-lab-*` containers and Spring service logs from `logs/`.
-The Spring services write logs to:
+The Spring services write logs with Logback to:
 
-- `logs/payment-service.log`
-- `logs/payment-processor-service.log`
+- `logs/payment-service/application.log`
+- `logs/payment-service/error.log`
+- `logs/payment-processor-service/application.log`
+- `logs/payment-processor-service/error.log`
+
+Set `LOG_DIR` when running a service from a different working directory.
 
 ## Test
 
