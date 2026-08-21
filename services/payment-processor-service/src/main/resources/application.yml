@@ -32,4 +32,4 @@ spring:
 
 logging:
   file:
-    path: ${LOG_DIR:../../logs/payment-processor-service}
+    path: ${LOG_DIR:${LOG_ROOT:/home/juaneugenio/programmig/java-senior-labs/logs}/payment-processor-service}

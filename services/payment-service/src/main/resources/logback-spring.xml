@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="../../logs/payment-service"/>
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="/home/juaneugenio/programmig/java-senior-labs/logs/payment-service"/>
 
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] traceId=%X{traceId:-} paymentId=%X{paymentId:-} %logger{36} - %msg%n"/>
 
