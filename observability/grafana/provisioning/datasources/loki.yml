@@ -2,6 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: Loki
+    uid: payment-lab-loki
     type: loki
     access: proxy
     url: http://payment-lab-loki:3100

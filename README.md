@@ -46,6 +46,31 @@ Start with Docker Compose when available:
 GRAFANA_ADMIN_PASSWORD=<strong-password> docker compose up -d loki grafana alloy
 ```
 
+Grafana is provisioned by the project with a Loki data source:
+
+- Provisioning file: `observability/grafana/provisioning/datasources/loki.yml`
+- Dashboard provider: `observability/grafana/provisioning/dashboards/payment-lab.yml`
+- Dashboard: `Payment Lab / Payment Lab Logs`
+- Data source name: `Loki`
+- Data source URL from Grafana: `http://payment-lab-loki:3100`
+- Browser URL for Grafana: `http://127.0.0.1:3000`
+- Login: `admin` and the `GRAFANA_ADMIN_PASSWORD` value used when starting Grafana
+
+In Grafana, open **Explore**, select the `Loki` data source, and query the labels that Alloy sends to Loki. Useful starting queries:
+
+```logql
+{service="payment-service"}
+{service="payment-processor-service"}
+{container="payment-lab-grafana"}
+{container="payment-lab-loki"}
+```
+
+If the Loki data source is not visible, add it manually in Grafana with:
+
+- Type: `Loki`
+- URL: `http://payment-lab-loki:3100`
+- Access: `Server`
+
 Alloy collects Docker logs for the `payment-lab-*` containers and Spring service logs from `logs/`.
 The Spring services write logs with Logback to:
 
