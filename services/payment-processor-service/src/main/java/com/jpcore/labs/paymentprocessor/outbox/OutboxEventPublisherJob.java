@@ -6,6 +6,7 @@ import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -41,6 +42,7 @@ public class OutboxEventPublisherJob {
                             RabbitMqConfig.PAYMENT_EXCHANGE,
                             routingKey(outboxEvent),
                             message,
+                            amqpMessage -> addTraceParentHeader(amqpMessage, traceParent(message)),
                             new CorrelationData(outboxEvent.getEventId().toString())
                     );
                     outboxEventService.markPublished(outboxEvent);
@@ -59,6 +61,13 @@ public class OutboxEventPublisherJob {
         }
     }
 
+    private Message addTraceParentHeader(Message amqpMessage, String traceParent) {
+        if (traceParent != null && !traceParent.isBlank()) {
+            amqpMessage.getMessageProperties().setHeader("traceparent", traceParent);
+        }
+        return amqpMessage;
+    }
+
     private String routingKey(OutboxEventEntity outboxEvent) {
         if (OutboxEventService.PAYMENT_PROCESSED.equals(outboxEvent.getEventType())) {
             return RabbitMqConfig.PAYMENT_PROCESSED_ROUTING_KEY;
@@ -75,6 +84,16 @@ public class OutboxEventPublisherJob {
         }
         if (message instanceof PaymentProcessingFailedMessage paymentProcessingFailedMessage) {
             return paymentProcessingFailedMessage.traceId();
+        }
+        return null;
+    }
+
+    private String traceParent(Object message) {
+        if (message instanceof PaymentProcessedMessage paymentProcessedMessage) {
+            return paymentProcessedMessage.traceParent();
+        }
+        if (message instanceof PaymentProcessingFailedMessage paymentProcessingFailedMessage) {
+            return paymentProcessingFailedMessage.traceParent();
         }
         return null;
     }

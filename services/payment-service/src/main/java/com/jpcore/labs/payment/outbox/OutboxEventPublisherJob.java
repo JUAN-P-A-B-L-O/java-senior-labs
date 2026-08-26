@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.core.Message;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -40,6 +41,7 @@ public class OutboxEventPublisherJob {
                             RabbitMqConfig.PAYMENT_EXCHANGE,
                             RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY,
                             message,
+                            amqpMessage -> addTraceParentHeader(amqpMessage, message.traceParent()),
                             correlationData
                     );
                     outboxEventService.markPublished(outboxEvent);
@@ -56,5 +58,12 @@ public class OutboxEventPublisherJob {
                 );
             }
         }
+    }
+
+    private Message addTraceParentHeader(Message amqpMessage, String traceParent) {
+        if (traceParent != null && !traceParent.isBlank()) {
+            amqpMessage.getMessageProperties().setHeader("traceparent", traceParent);
+        }
+        return amqpMessage;
     }
 }

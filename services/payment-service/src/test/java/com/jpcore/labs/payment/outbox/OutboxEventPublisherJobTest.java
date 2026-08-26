@@ -4,6 +4,7 @@ import com.jpcore.labs.payment.config.RabbitMqConfig;
 import com.jpcore.labs.payment.payment.PaymentRequestedMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.amqp.core.MessagePostProcessor;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
@@ -31,6 +32,7 @@ class OutboxEventPublisherJobTest {
         when(outboxEventService.findWaitingPublish()).thenReturn(List.of(outboxEvent));
         when(outboxEventService.toPaymentRequestedMessage(outboxEvent)).thenReturn(message);
         ArgumentCaptor<CorrelationData> correlationDataCaptor = ArgumentCaptor.forClass(CorrelationData.class);
+        ArgumentCaptor<MessagePostProcessor> messagePostProcessorCaptor = ArgumentCaptor.forClass(MessagePostProcessor.class);
 
         job.publishWaitingEvents();
 
@@ -38,6 +40,7 @@ class OutboxEventPublisherJobTest {
                 eq(RabbitMqConfig.PAYMENT_EXCHANGE),
                 eq(RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY),
                 eq(message),
+                messagePostProcessorCaptor.capture(),
                 correlationDataCaptor.capture()
         );
         assertThat(correlationDataCaptor.getValue().getId()).isEqualTo(outboxEvent.getEventId().toString());
@@ -59,6 +62,7 @@ class OutboxEventPublisherJobTest {
                         eq(RabbitMqConfig.PAYMENT_EXCHANGE),
                         eq(RabbitMqConfig.PAYMENT_PROCESS_ROUTING_KEY),
                         eq(message),
+                        org.mockito.ArgumentMatchers.any(MessagePostProcessor.class),
                         org.mockito.ArgumentMatchers.any(CorrelationData.class)
                 );
 
@@ -84,7 +88,8 @@ class OutboxEventPublisherJobTest {
                 outboxEvent.getAggregateId().toString(),
                 new BigDecimal("100.50"),
                 "BRL",
-                "test payment"
+                "test payment",
+                "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
         );
     }
 }

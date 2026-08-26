@@ -3,6 +3,7 @@ package com.jpcore.labs.paymentprocessor.outbox;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
+import com.jpcore.labs.paymentprocessor.payment.TraceContextProvider;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -23,7 +24,10 @@ class OutboxEventServiceTest {
     @Test
     void savesPaymentProcessedEventAsWaitingPublish() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
-        OutboxEventService service = new OutboxEventService(repository, new ObjectMapper());
+        TraceContextProvider traceContextProvider = mock(TraceContextProvider.class);
+        OutboxEventService service = new OutboxEventService(repository, new ObjectMapper(), traceContextProvider);
+        when(traceContextProvider.currentTraceParent())
+                .thenReturn("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
         when(repository.saveAndFlush(any(OutboxEventEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         ArgumentCaptor<OutboxEventEntity> captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
@@ -37,13 +41,17 @@ class OutboxEventServiceTest {
         assertThat(result.getEventType()).isEqualTo(OutboxEventService.PAYMENT_PROCESSED);
         assertThat(result.getStatus()).isEqualTo(OutboxEventStatus.WAITING_PUBLISH);
         assertThat(result.getPayload()).contains("\"traceId\":\"33333333-3333-3333-3333-333333333333\"");
+        assertThat(result.getPayload()).contains("\"traceParent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"");
         assertThat(result.getPayload()).contains("\"requestedEventId\":\"11111111-1111-1111-1111-111111111111\"");
     }
 
     @Test
     void savesPaymentProcessingFailedEventAsWaitingPublish() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
-        OutboxEventService service = new OutboxEventService(repository, new ObjectMapper());
+        TraceContextProvider traceContextProvider = mock(TraceContextProvider.class);
+        OutboxEventService service = new OutboxEventService(repository, new ObjectMapper(), traceContextProvider);
+        when(traceContextProvider.currentTraceParent())
+                .thenReturn("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
         when(repository.saveAndFlush(any(OutboxEventEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -54,13 +62,15 @@ class OutboxEventServiceTest {
         assertThat(result.getEventType()).isEqualTo(OutboxEventService.PAYMENT_PROCESSING_FAILED);
         assertThat(result.getStatus()).isEqualTo(OutboxEventStatus.WAITING_PUBLISH);
         assertThat(result.getPayload()).contains("\"traceId\":\"33333333-3333-3333-3333-333333333333\"");
+        assertThat(result.getPayload()).contains("\"traceParent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"");
         assertThat(result.getPayload()).contains("\"reason\":\"denied\"");
     }
 
     @Test
     void deserializesOutboxPayloadByEventType() {
         OutboxEventRepository repository = mock(OutboxEventRepository.class);
-        OutboxEventService service = new OutboxEventService(repository, new ObjectMapper());
+        TraceContextProvider traceContextProvider = mock(TraceContextProvider.class);
+        OutboxEventService service = new OutboxEventService(repository, new ObjectMapper(), traceContextProvider);
         OutboxEventEntity processed = new OutboxEventEntity(
                 UUID.fromString("44444444-4444-4444-4444-444444444444"),
                 UUID.fromString(PAYMENT_ID),

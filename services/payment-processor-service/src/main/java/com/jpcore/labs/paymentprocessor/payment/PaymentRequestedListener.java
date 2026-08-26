@@ -38,13 +38,19 @@ public class PaymentRequestedListener {
             try {
                 try {
                     paymentAuthorizationService.authorize(message);
-                    outboxEventService.savePaymentProcessed(message.eventId(), message.traceId(), message.paymentId());
+                    outboxEventService.savePaymentProcessed(
+                            message.eventId(),
+                            message.traceId(),
+                            message.paymentId(),
+                            message.traceParent()
+                    );
                 } catch (PaymentAuthorizationException exception) {
                     outboxEventService.savePaymentProcessingFailed(
                             message.eventId(),
                             message.traceId(),
                             message.paymentId(),
-                            exception.getMessage()
+                            exception.getMessage(),
+                            message.traceParent()
                     );
                 }
                 processedEventService.markProcessed(message.eventId());

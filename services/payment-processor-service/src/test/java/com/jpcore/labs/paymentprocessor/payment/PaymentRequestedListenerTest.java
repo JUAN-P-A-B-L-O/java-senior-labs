@@ -22,6 +22,7 @@ class PaymentRequestedListenerTest {
     private static final UUID EVENT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID TRACE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final String PAYMENT_ID = "22222222-2222-2222-2222-222222222222";
+    private static final String TRACE_PARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
     @Test
     void authorizesPaymentWhenMessageIsReceived() {
@@ -39,7 +40,8 @@ class PaymentRequestedListenerTest {
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
         when(paymentAuthorizationService.authorize(message)).thenReturn(true);
@@ -47,7 +49,7 @@ class PaymentRequestedListenerTest {
         listener.listen(message);
 
         verify(paymentAuthorizationService).authorize(message);
-        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
+        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 
@@ -67,7 +69,8 @@ class PaymentRequestedListenerTest {
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(true);
 
@@ -76,6 +79,7 @@ class PaymentRequestedListenerTest {
         verify(paymentAuthorizationService, never()).authorize(message);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 
@@ -95,7 +99,8 @@ class PaymentRequestedListenerTest {
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         PaymentAuthorizationException exception = new PaymentAuthorizationException(
                 "Payment authorization failed for paymentId=" + PAYMENT_ID
@@ -110,7 +115,8 @@ class PaymentRequestedListenerTest {
                 EVENT_ID,
                 TRACE_ID,
                 PAYMENT_ID,
-                "Payment authorization failed for paymentId=" + PAYMENT_ID
+                "Payment authorization failed for paymentId=" + PAYMENT_ID,
+                TRACE_PARENT
         );
         verify(processedEventService).markProcessed(EVENT_ID);
     }
@@ -131,7 +137,8 @@ class PaymentRequestedListenerTest {
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         RuntimeException exception = new RuntimeException("Unexpected authorization error");
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
@@ -143,6 +150,7 @@ class PaymentRequestedListenerTest {
         verify(paymentAuthorizationService).authorize(message);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(outboxEventService, never()).savePaymentProcessingFailed(
                 EVENT_ID,
                 PAYMENT_ID,
@@ -153,6 +161,13 @@ class PaymentRequestedListenerTest {
                 TRACE_ID,
                 PAYMENT_ID,
                 "Unexpected authorization error"
+        );
+        verify(outboxEventService, never()).savePaymentProcessingFailed(
+                EVENT_ID,
+                TRACE_ID,
+                PAYMENT_ID,
+                "Unexpected authorization error",
+                TRACE_PARENT
         );
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
@@ -179,7 +194,8 @@ class PaymentRequestedListenerTest {
 	                          "paymentId": "22222222-2222-2222-2222-222222222222",
                           "amount": 10,
                           "currency": "BRL",
-                          "description": "test payment"
+                          "description": "test payment",
+                          "traceParent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
                         }
                         """.getBytes(StandardCharsets.UTF_8),
                 properties
@@ -191,7 +207,7 @@ class PaymentRequestedListenerTest {
         listener.listen(message);
 
         verify(paymentAuthorizationService).authorize(message);
-        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
+        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 }

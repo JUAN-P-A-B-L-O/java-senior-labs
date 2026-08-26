@@ -13,9 +13,11 @@ public class PaymentRequestedPublisher {
     private static final Logger log = LoggerFactory.getLogger(PaymentRequestedPublisher.class);
 
     private final OutboxEventService outboxEventService;
+    private final TraceContextProvider traceContextProvider;
 
-    public PaymentRequestedPublisher(OutboxEventService outboxEventService) {
+    public PaymentRequestedPublisher(OutboxEventService outboxEventService, TraceContextProvider traceContextProvider) {
         this.outboxEventService = outboxEventService;
+        this.traceContextProvider = traceContextProvider;
     }
 
     public void publish(PaymentEntity payment) {
@@ -31,7 +33,8 @@ public class PaymentRequestedPublisher {
                 payment.getId().toString(),
                 payment.getAmount(),
                 payment.getCurrency(),
-                payment.getDescription()
+                payment.getDescription(),
+                traceContextProvider.currentTraceParent()
         );
         outboxEventService.savePaymentRequested(message);
         log.info("PaymentRequested saved to outbox. eventId={}", eventId);

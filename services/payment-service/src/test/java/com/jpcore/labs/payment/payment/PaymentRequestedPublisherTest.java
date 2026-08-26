@@ -17,7 +17,8 @@ class PaymentRequestedPublisherTest {
     @Test
     void savesPaymentRequestedMessageToOutboxWithEventId() {
         OutboxEventService outboxEventService = mock(OutboxEventService.class);
-        PaymentRequestedPublisher publisher = new PaymentRequestedPublisher(outboxEventService);
+        TraceContextProvider traceContextProvider = mock(TraceContextProvider.class);
+        PaymentRequestedPublisher publisher = new PaymentRequestedPublisher(outboxEventService, traceContextProvider);
         PaymentEntity payment = new PaymentEntity(
                 new BigDecimal("100.50"),
                 "BRL",
@@ -28,6 +29,8 @@ class PaymentRequestedPublisherTest {
         UUID traceId = UUID.fromString("33333333-3333-3333-3333-333333333333");
         ReflectionTestUtils.setField(payment, "id", paymentId);
         ArgumentCaptor<PaymentRequestedMessage> messageCaptor = ArgumentCaptor.forClass(PaymentRequestedMessage.class);
+        String traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        org.mockito.Mockito.when(traceContextProvider.currentTraceParent()).thenReturn(traceParent);
 
         publisher.publish(payment, traceId);
 
@@ -39,5 +42,6 @@ class PaymentRequestedPublisherTest {
         assertThat(message.amount()).isEqualByComparingTo("100.50");
         assertThat(message.currency()).isEqualTo("BRL");
         assertThat(message.description()).isEqualTo("test payment");
+        assertThat(message.traceParent()).isEqualTo(traceParent);
     }
 }

@@ -63,6 +63,8 @@ services:
         condition: service_healthy
       prometheus:
         condition: service_started
+      tempo:
+        condition: service_started
 
   prometheus:
     image: prom/prometheus:v2.55.1
@@ -76,6 +78,20 @@ services:
       - payment_lab_prometheus_data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: payment-lab-tempo
+    user: "0"
+    networks:
+      - observability
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    ports:
+      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:4318:4318"
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - payment_lab_tempo_data:/tmp/tempo
 
   alloy:
     image: grafana/alloy:v1.5.1
@@ -102,6 +118,7 @@ volumes:
   payment_lab_loki_data:
   payment_lab_grafana_data:
   payment_lab_prometheus_data:
+  payment_lab_tempo_data:
 
 networks:
   observability:
