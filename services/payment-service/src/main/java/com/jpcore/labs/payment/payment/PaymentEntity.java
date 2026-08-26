@@ -67,6 +67,10 @@ public class PaymentEntity {
         return status;
     }
 
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
     public void markCompleted() {
         this.status = PaymentStatus.COMPLETED;
     }

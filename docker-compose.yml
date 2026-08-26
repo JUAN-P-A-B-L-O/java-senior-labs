@@ -61,6 +61,21 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+      prometheus:
+        condition: service_started
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: payment-lab-prometheus
+    networks:
+      - observability
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - payment_lab_prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   alloy:
     image: grafana/alloy:v1.5.1
@@ -86,6 +101,7 @@ volumes:
   payment_lab_postgres_data:
   payment_lab_loki_data:
   payment_lab_grafana_data:
+  payment_lab_prometheus_data:
 
 networks:
   observability:

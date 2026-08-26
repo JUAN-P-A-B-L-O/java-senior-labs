@@ -26,15 +26,18 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final IdempotencyService idempotencyService;
     private final PaymentRequestedPublisher paymentRequestedPublisher;
+    private final PaymentMetrics paymentMetrics;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             IdempotencyService idempotencyService,
-            PaymentRequestedPublisher paymentRequestedPublisher
+            PaymentRequestedPublisher paymentRequestedPublisher,
+            PaymentMetrics paymentMetrics
     ) {
         this.paymentRepository = paymentRepository;
         this.idempotencyService = idempotencyService;
         this.paymentRequestedPublisher = paymentRequestedPublisher;
+        this.paymentMetrics = paymentMetrics;
     }
 
     @Transactional
@@ -67,6 +70,7 @@ public class PaymentService {
         PaymentEntity savedPayment = paymentRepository.saveAndFlush(payment);
         try (PaymentLogContext ignored = PaymentLogContext.with(traceId, savedPayment.getId())) {
             log.info("Payment created. status={}", savedPayment.getStatus());
+            paymentMetrics.recordCreated();
 
             idempotencyService.complete(idempotency, savedPayment.getId());
 
@@ -96,6 +100,7 @@ public class PaymentService {
                     .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
             if (payment.getStatus() == PaymentStatus.PROCESSING) {
                 payment.markCompleted();
+                paymentMetrics.recordCompleted(processingDuration(payment));
                 log.info("Payment status updated. status={}", payment.getStatus());
             } else {
                 log.warn("Payment status update ignored. status={} requestedStatus={}",
@@ -118,6 +123,7 @@ public class PaymentService {
                     .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
             if (payment.getStatus() == PaymentStatus.PROCESSING) {
                 payment.markFailed();
+                paymentMetrics.recordFailed(processingDuration(payment));
                 log.info("Payment status updated. status={}", payment.getStatus());
             } else {
                 log.warn("Payment status update ignored. status={} requestedStatus={}",
@@ -126,6 +132,14 @@ public class PaymentService {
                 );
             }
         }
+    }
+
+    private Duration processingDuration(PaymentEntity payment) {
+        Instant createdAt = payment.getCreatedAt();
+        if (createdAt == null) {
+            return Duration.ZERO;
+        }
+        return Duration.between(createdAt, Instant.now());
     }
 
     private PaymentResponse toResponse(PaymentEntity payment) {
