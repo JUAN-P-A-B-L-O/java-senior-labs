@@ -2,8 +2,12 @@ package com.jpcore.labs.paymentprocessor.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jpcore.labs.paymentprocessor.payment.PaymentLogContext;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
 import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
+import com.jpcore.labs.paymentprocessor.payment.TraceContextProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,32 +18,95 @@ import java.util.UUID;
 @Service
 public class OutboxEventService {
 
+    private static final Logger log = LoggerFactory.getLogger(OutboxEventService.class);
+
     public static final String PAYMENT_PROCESSED = "PaymentProcessed";
     public static final String PAYMENT_PROCESSING_FAILED = "PaymentProcessingFailed";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final TraceContextProvider traceContextProvider;
 
-    public OutboxEventService(OutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+    public OutboxEventService(
+            OutboxEventRepository outboxEventRepository,
+            ObjectMapper objectMapper,
+            TraceContextProvider traceContextProvider
+    ) {
         this.outboxEventRepository = outboxEventRepository;
         this.objectMapper = objectMapper;
+        this.traceContextProvider = traceContextProvider;
     }
 
     @Transactional
     public OutboxEventEntity savePaymentProcessed(UUID requestedEventId, String paymentId) {
-        PaymentProcessedMessage message = new PaymentProcessedMessage(UUID.randomUUID(), requestedEventId, paymentId);
-        return save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
+        return savePaymentProcessed(requestedEventId, null, paymentId, null);
+    }
+
+    @Transactional
+    public OutboxEventEntity savePaymentProcessed(UUID requestedEventId, UUID traceId, String paymentId) {
+        return savePaymentProcessed(requestedEventId, traceId, paymentId, null);
+    }
+
+    @Transactional
+    public OutboxEventEntity savePaymentProcessed(
+            UUID requestedEventId,
+            UUID traceId,
+            String paymentId,
+            String fallbackTraceParent
+    ) {
+        try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
+            PaymentProcessedMessage message = new PaymentProcessedMessage(
+                    UUID.randomUUID(),
+                    traceId,
+                    requestedEventId,
+                    paymentId,
+                    currentOrFallbackTraceParent(fallbackTraceParent)
+            );
+            OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
+            log.info("Result event saved to outbox. eventId={} eventType={} requestedEventId={}",
+                    outboxEvent.getEventId(),
+                    outboxEvent.getEventType(),
+                    requestedEventId
+            );
+            return outboxEvent;
+        }
     }
 
     @Transactional
     public OutboxEventEntity savePaymentProcessingFailed(UUID requestedEventId, String paymentId, String reason) {
-        PaymentProcessingFailedMessage message = new PaymentProcessingFailedMessage(
-                UUID.randomUUID(),
-                requestedEventId,
-                paymentId,
-                reason
-        );
-        return save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSING_FAILED, message);
+        return savePaymentProcessingFailed(requestedEventId, null, paymentId, reason, null);
+    }
+
+    @Transactional
+    public OutboxEventEntity savePaymentProcessingFailed(UUID requestedEventId, UUID traceId, String paymentId, String reason) {
+        return savePaymentProcessingFailed(requestedEventId, traceId, paymentId, reason, null);
+    }
+
+    @Transactional
+    public OutboxEventEntity savePaymentProcessingFailed(
+            UUID requestedEventId,
+            UUID traceId,
+            String paymentId,
+            String reason,
+            String fallbackTraceParent
+    ) {
+        try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
+            PaymentProcessingFailedMessage message = new PaymentProcessingFailedMessage(
+                    UUID.randomUUID(),
+                    traceId,
+                    requestedEventId,
+                    paymentId,
+                    reason,
+                    currentOrFallbackTraceParent(fallbackTraceParent)
+            );
+            OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSING_FAILED, message);
+            log.info("Result event saved to outbox. eventId={} eventType={} requestedEventId={}",
+                    outboxEvent.getEventId(),
+                    outboxEvent.getEventType(),
+                    requestedEventId
+            );
+            return outboxEvent;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -85,5 +152,13 @@ public class OutboxEventService {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize outbox event payload", exception);
         }
+    }
+
+    private String currentOrFallbackTraceParent(String fallbackTraceParent) {
+        String currentTraceParent = traceContextProvider.currentTraceParent();
+        if (currentTraceParent != null) {
+            return currentTraceParent;
+        }
+        return fallbackTraceParent;
     }
 }

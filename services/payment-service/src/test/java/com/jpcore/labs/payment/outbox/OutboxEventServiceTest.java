@@ -22,10 +22,12 @@ class OutboxEventServiceTest {
         OutboxEventService service = new OutboxEventService(repository, new ObjectMapper());
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
                 "22222222-2222-2222-2222-222222222222",
                 new BigDecimal("100.50"),
                 "BRL",
-                "test payment"
+                "test payment",
+                "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
         );
         when(repository.saveAndFlush(any(OutboxEventEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -41,6 +43,8 @@ class OutboxEventServiceTest {
         assertThat(savedEvent.getEventType()).isEqualTo("PaymentRequested");
         assertThat(savedEvent.getStatus()).isEqualTo(OutboxEventStatus.WAITING_PUBLISH);
         assertThat(savedEvent.getPayload()).contains("\"eventId\":\"11111111-1111-1111-1111-111111111111\"");
+        assertThat(savedEvent.getPayload()).contains("\"traceId\":\"33333333-3333-3333-3333-333333333333\"");
+        assertThat(savedEvent.getPayload()).contains("\"traceParent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"");
         assertThat(savedEvent.getPayload()).contains("\"paymentId\":\"22222222-2222-2222-2222-222222222222\"");
     }
 
@@ -65,6 +69,7 @@ class OutboxEventServiceTest {
                 """
                         {
                           "eventId": "11111111-1111-1111-1111-111111111111",
+                          "traceId": "33333333-3333-3333-3333-333333333333",
                           "paymentId": "22222222-2222-2222-2222-222222222222",
                           "amount": 100.50,
                           "currency": "BRL",
@@ -77,6 +82,7 @@ class OutboxEventServiceTest {
         PaymentRequestedMessage message = service.toPaymentRequestedMessage(outboxEvent);
 
         assertThat(message.eventId()).isEqualTo(outboxEvent.getEventId());
+        assertThat(message.traceId()).isEqualTo(UUID.fromString("33333333-3333-3333-3333-333333333333"));
         assertThat(message.paymentId()).isEqualTo(outboxEvent.getAggregateId().toString());
         assertThat(message.amount()).isEqualByComparingTo("100.50");
         assertThat(message.currency()).isEqualTo("BRL");

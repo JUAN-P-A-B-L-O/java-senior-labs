@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,7 +20,9 @@ import static org.mockito.Mockito.when;
 class PaymentRequestedListenerTest {
 
     private static final UUID EVENT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID TRACE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final String PAYMENT_ID = "22222222-2222-2222-2222-222222222222";
+    private static final String TRACE_PARENT = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
     @Test
     void authorizesPaymentWhenMessageIsReceived() {
@@ -33,10 +36,12 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
         when(paymentAuthorizationService.authorize(message)).thenReturn(true);
@@ -44,7 +49,7 @@ class PaymentRequestedListenerTest {
         listener.listen(message);
 
         verify(paymentAuthorizationService).authorize(message);
-        verify(outboxEventService).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 
@@ -60,10 +65,12 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(true);
 
@@ -71,6 +78,8 @@ class PaymentRequestedListenerTest {
 
         verify(paymentAuthorizationService, never()).authorize(message);
         verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 
@@ -86,10 +95,12 @@ class PaymentRequestedListenerTest {
         );
         PaymentRequestedMessage message = new PaymentRequestedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
                 BigDecimal.TEN,
                 "BRL",
-                "test payment"
+                "test payment",
+                TRACE_PARENT
         );
         PaymentAuthorizationException exception = new PaymentAuthorizationException(
                 "Payment authorization failed for paymentId=" + PAYMENT_ID
@@ -102,10 +113,63 @@ class PaymentRequestedListenerTest {
         verify(paymentAuthorizationService).authorize(message);
         verify(outboxEventService).savePaymentProcessingFailed(
                 EVENT_ID,
+                TRACE_ID,
                 PAYMENT_ID,
-                "Payment authorization failed for paymentId=" + PAYMENT_ID
+                "Payment authorization failed for paymentId=" + PAYMENT_ID,
+                TRACE_PARENT
         );
         verify(processedEventService).markProcessed(EVENT_ID);
+    }
+
+    @Test
+    void doesNotPublishFinalResultWhenUnexpectedAuthorizationErrorOccurs() {
+        PaymentAuthorizationService paymentAuthorizationService = mock(PaymentAuthorizationService.class);
+        ProcessedEventService processedEventService = mock(ProcessedEventService.class);
+        OutboxEventService outboxEventService = mock(OutboxEventService.class);
+        PaymentRequestedListener listener = new PaymentRequestedListener(
+                paymentAuthorizationService,
+                processedEventService,
+                outboxEventService
+        );
+        PaymentRequestedMessage message = new PaymentRequestedMessage(
+                EVENT_ID,
+                TRACE_ID,
+                PAYMENT_ID,
+                BigDecimal.TEN,
+                "BRL",
+                "test payment",
+                TRACE_PARENT
+        );
+        RuntimeException exception = new RuntimeException("Unexpected authorization error");
+        when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
+        when(paymentAuthorizationService.authorize(message)).thenThrow(exception);
+
+        assertThatThrownBy(() -> listener.listen(message))
+                .isSameAs(exception);
+
+        verify(paymentAuthorizationService).authorize(message);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID);
+        verify(outboxEventService, never()).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
+        verify(outboxEventService, never()).savePaymentProcessingFailed(
+                EVENT_ID,
+                PAYMENT_ID,
+                "Unexpected authorization error"
+        );
+        verify(outboxEventService, never()).savePaymentProcessingFailed(
+                EVENT_ID,
+                TRACE_ID,
+                PAYMENT_ID,
+                "Unexpected authorization error"
+        );
+        verify(outboxEventService, never()).savePaymentProcessingFailed(
+                EVENT_ID,
+                TRACE_ID,
+                PAYMENT_ID,
+                "Unexpected authorization error",
+                TRACE_PARENT
+        );
+        verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 
     @Test
@@ -125,11 +189,13 @@ class PaymentRequestedListenerTest {
         Message amqpMessage = new Message(
                 """
                         {
-                          "eventId": "11111111-1111-1111-1111-111111111111",
-                          "paymentId": "22222222-2222-2222-2222-222222222222",
+	                          "eventId": "11111111-1111-1111-1111-111111111111",
+	                          "traceId": "33333333-3333-3333-3333-333333333333",
+	                          "paymentId": "22222222-2222-2222-2222-222222222222",
                           "amount": 10,
                           "currency": "BRL",
-                          "description": "test payment"
+                          "description": "test payment",
+                          "traceParent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
                         }
                         """.getBytes(StandardCharsets.UTF_8),
                 properties
@@ -141,7 +207,7 @@ class PaymentRequestedListenerTest {
         listener.listen(message);
 
         verify(paymentAuthorizationService).authorize(message);
-        verify(outboxEventService).savePaymentProcessed(EVENT_ID, PAYMENT_ID);
+        verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 }

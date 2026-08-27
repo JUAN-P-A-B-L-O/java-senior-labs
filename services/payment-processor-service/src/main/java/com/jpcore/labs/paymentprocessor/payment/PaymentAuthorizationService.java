@@ -1,38 +1,38 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
+
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 
 @Service
 public class PaymentAuthorizationService {
 
-    private final RestClient restClient;
-    private final String authorizationUrl;
+    private static final Logger log = LoggerFactory.getLogger(PaymentAuthorizationService.class);
 
-    public PaymentAuthorizationService(
-            RestClient.Builder restClientBuilder,
-            @Value("${payment-processor.authorization-url}") String authorizationUrl
-    ) {
-        this.restClient = restClientBuilder.build();
-        this.authorizationUrl = authorizationUrl;
+    private final BooleanSupplier authorizationDecision;
+
+    public PaymentAuthorizationService() {
+        this(() -> ThreadLocalRandom.current().nextBoolean());
+    }
+
+    PaymentAuthorizationService(BooleanSupplier authorizationDecision) {
+        this.authorizationDecision = authorizationDecision;
     }
 
     public boolean authorize(PaymentRequestedMessage message) {
-        try {
-            AuthorizationResponse response = restClient.get()
-                    .uri(authorizationUrl)
-                    .retrieve()
-                    .body(AuthorizationResponse.class);
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+            log.info("Authorization started. eventId={}", message.eventId());
 
-            if (response != null && response.isAuthorized()) {
+            if (authorizationDecision.getAsBoolean()) {
+                log.info("Authorization succeeded. eventId={}", message.eventId());
                 return true;
             }
 
+            log.warn("Authorization failed. eventId={}", message.eventId());
             throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId());
-        } catch (RestClientException exception) {
-            throw new PaymentAuthorizationException("Payment authorization failed for paymentId=" + message.paymentId(), exception);
         }
     }
 }

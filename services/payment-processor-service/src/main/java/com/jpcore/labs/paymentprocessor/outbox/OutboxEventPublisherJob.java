@@ -1,12 +1,18 @@
 package com.jpcore.labs.paymentprocessor.outbox;
 
 import com.jpcore.labs.paymentprocessor.config.RabbitMqConfig;
+import com.jpcore.labs.paymentprocessor.payment.PaymentLogContext;
+import com.jpcore.labs.paymentprocessor.payment.PaymentProcessedMessage;
+import com.jpcore.labs.paymentprocessor.payment.PaymentProcessingFailedMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.util.UUID;
 
 @Service
 public class OutboxEventPublisherJob {
@@ -28,18 +34,38 @@ public class OutboxEventPublisherJob {
     }
 
     private void publish(OutboxEventEntity outboxEvent) {
-        try {
-            Object message = outboxEventService.toMessage(outboxEvent);
-            rabbitTemplate.convertAndSend(
-                    RabbitMqConfig.PAYMENT_EXCHANGE,
-                    routingKey(outboxEvent),
-                    message,
-                    new CorrelationData(outboxEvent.getEventId().toString())
-            );
-            outboxEventService.markPublished(outboxEvent);
-        } catch (RuntimeException exception) {
-            log.error("Could not publish processor outbox event. eventId={}", outboxEvent.getEventId(), exception);
+        try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
+            try {
+                Object message = outboxEventService.toMessage(outboxEvent);
+                try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(traceId(message), outboxEvent.getAggregateId())) {
+                    rabbitTemplate.convertAndSend(
+                            RabbitMqConfig.PAYMENT_EXCHANGE,
+                            routingKey(outboxEvent),
+                            message,
+                            amqpMessage -> addTraceParentHeader(amqpMessage, traceParent(message)),
+                            new CorrelationData(outboxEvent.getEventId().toString())
+                    );
+                    outboxEventService.markPublished(outboxEvent);
+                    log.info("Result event published. eventId={} eventType={}",
+                            outboxEvent.getEventId(),
+                            outboxEvent.getEventType()
+                    );
+                }
+            } catch (RuntimeException exception) {
+                log.error("Could not publish processor outbox event. eventId={} eventType={}",
+                        outboxEvent.getEventId(),
+                        outboxEvent.getEventType(),
+                        exception
+                );
+            }
         }
+    }
+
+    private Message addTraceParentHeader(Message amqpMessage, String traceParent) {
+        if (traceParent != null && !traceParent.isBlank()) {
+            amqpMessage.getMessageProperties().setHeader("traceparent", traceParent);
+        }
+        return amqpMessage;
     }
 
     private String routingKey(OutboxEventEntity outboxEvent) {
@@ -50,5 +76,25 @@ public class OutboxEventPublisherJob {
             return RabbitMqConfig.PAYMENT_PROCESSING_FAILED_ROUTING_KEY;
         }
         throw new IllegalStateException("Unknown outbox event type: " + outboxEvent.getEventType());
+    }
+
+    private UUID traceId(Object message) {
+        if (message instanceof PaymentProcessedMessage paymentProcessedMessage) {
+            return paymentProcessedMessage.traceId();
+        }
+        if (message instanceof PaymentProcessingFailedMessage paymentProcessingFailedMessage) {
+            return paymentProcessingFailedMessage.traceId();
+        }
+        return null;
+    }
+
+    private String traceParent(Object message) {
+        if (message instanceof PaymentProcessedMessage paymentProcessedMessage) {
+            return paymentProcessedMessage.traceParent();
+        }
+        if (message instanceof PaymentProcessingFailedMessage paymentProcessingFailedMessage) {
+            return paymentProcessingFailedMessage.traceParent();
+        }
+        return null;
     }
 }

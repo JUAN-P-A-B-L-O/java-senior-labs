@@ -1,0 +1,9 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    uid: payment-lab-tempo
+    type: tempo
+    access: proxy
+    url: http://payment-lab-tempo:3200
+    editable: false

@@ -4,7 +4,17 @@ import java.util.UUID;
 
 public record PaymentProcessedMessage(
         UUID eventId,
+        UUID traceId,
         UUID requestedEventId,
-        String paymentId
+        String paymentId,
+        String traceParent
 ) {
+    public PaymentProcessedMessage(
+            UUID eventId,
+            UUID traceId,
+            UUID requestedEventId,
+            String paymentId
+    ) {
+        this(eventId, traceId, requestedEventId, paymentId, null);
+    }
 }

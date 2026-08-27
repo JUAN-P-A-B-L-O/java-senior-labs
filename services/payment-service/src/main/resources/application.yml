@@ -4,8 +4,11 @@ spring:
   rabbitmq:
     publisher-confirm-type: correlated
     publisher-returns: true
+    template:
+      observation-enabled: true
     listener:
       simple:
+        observation-enabled: true
         default-requeue-rejected: false
         retry:
           enabled: true
@@ -23,3 +26,22 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+
+logging:
+  file:
+    path: ${LOG_DIR:${LOG_ROOT:/home/juaneugenio/programmig/java-senior-labs/logs}/payment-service}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  metrics:
+    tags:
+      application: ${spring.application.name}

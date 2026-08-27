@@ -13,6 +13,7 @@ class PaymentResultListenerTest {
 
     private static final UUID EVENT_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID REQUESTED_EVENT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID TRACE_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final String PAYMENT_ID = "22222222-2222-2222-2222-222222222222";
 
     @Test
@@ -20,12 +21,12 @@ class PaymentResultListenerTest {
         PaymentService paymentService = mock(PaymentService.class);
         PaymentResultProcessedEventService processedEventService = mock(PaymentResultProcessedEventService.class);
         PaymentResultListener listener = new PaymentResultListener(paymentService, processedEventService);
-        PaymentProcessedMessage message = new PaymentProcessedMessage(EVENT_ID, REQUESTED_EVENT_ID, PAYMENT_ID);
+        PaymentProcessedMessage message = new PaymentProcessedMessage(EVENT_ID, TRACE_ID, REQUESTED_EVENT_ID, PAYMENT_ID);
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
 
         listener.listen(message);
 
-        verify(paymentService).completePayment(PAYMENT_ID);
+        verify(paymentService).completePayment(PAYMENT_ID, TRACE_ID);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 
@@ -36,6 +37,7 @@ class PaymentResultListenerTest {
         PaymentResultListener listener = new PaymentResultListener(paymentService, processedEventService);
         PaymentProcessingFailedMessage message = new PaymentProcessingFailedMessage(
                 EVENT_ID,
+                TRACE_ID,
                 REQUESTED_EVENT_ID,
                 PAYMENT_ID,
                 "denied"
@@ -44,7 +46,7 @@ class PaymentResultListenerTest {
 
         listener.listen(message);
 
-        verify(paymentService).failPayment(PAYMENT_ID);
+        verify(paymentService).failPayment(PAYMENT_ID, TRACE_ID);
         verify(processedEventService).markProcessed(EVENT_ID);
     }
 
@@ -53,12 +55,12 @@ class PaymentResultListenerTest {
         PaymentService paymentService = mock(PaymentService.class);
         PaymentResultProcessedEventService processedEventService = mock(PaymentResultProcessedEventService.class);
         PaymentResultListener listener = new PaymentResultListener(paymentService, processedEventService);
-        PaymentProcessedMessage message = new PaymentProcessedMessage(EVENT_ID, REQUESTED_EVENT_ID, PAYMENT_ID);
+        PaymentProcessedMessage message = new PaymentProcessedMessage(EVENT_ID, TRACE_ID, REQUESTED_EVENT_ID, PAYMENT_ID);
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(true);
 
         listener.listen(message);
 
-        verify(paymentService, never()).completePayment(PAYMENT_ID);
+        verify(paymentService, never()).completePayment(PAYMENT_ID, TRACE_ID);
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 }

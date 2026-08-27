@@ -4,6 +4,7 @@ import com.jpcore.labs.payment.idempotency.IdempotencyEntity;
 import com.jpcore.labs.payment.idempotency.IdempotencyRequestBlockedException;
 import com.jpcore.labs.payment.idempotency.IdempotencyRepository;
 import com.jpcore.labs.payment.idempotency.IdempotencyStatus;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +30,9 @@ class PaymentServiceTest {
 
     @Autowired
     private IdempotencyRepository idempotencyRepository;
+
+    @Autowired
+    private MeterRegistry meterRegistry;
 
     @MockBean
     private PaymentRequestedPublisher paymentRequestedPublisher;
@@ -59,7 +63,7 @@ class PaymentServiceTest {
         assertThat(createdIdempotency.getStatus()).isEqualTo(IdempotencyStatus.COMPLETED);
         assertThat(createdIdempotency.getRequestBodyHash()).hasSize(64);
         assertThat(createdIdempotency.getPaymentId()).isEqualTo(UUID.fromString(response.id()));
-        verify(paymentRequestedPublisher).publish(any(PaymentEntity.class));
+        verify(paymentRequestedPublisher).publish(any(PaymentEntity.class), any(UUID.class));
     }
 
     @Test
@@ -74,7 +78,7 @@ class PaymentServiceTest {
         PaymentResponse secondResponse = paymentService.createPayment(request, "completed-payment-key");
 
         assertThat(secondResponse).isEqualTo(firstResponse);
-        verify(paymentRequestedPublisher, times(1)).publish(any(PaymentEntity.class));
+        verify(paymentRequestedPublisher, times(1)).publish(any(PaymentEntity.class), any(UUID.class));
     }
 
     @Test
@@ -152,5 +156,38 @@ class PaymentServiceTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(updatedPayment.status()).isEqualTo(PaymentStatus.FAILED);
+    }
+
+    @Test
+    void recordsPaymentLifecycleMetrics() {
+        double createdBefore = counterCount("payments_created");
+        double completedBefore = counterCount("payments_completed");
+        double failedBefore = counterCount("payments_failed");
+        long durationCountBefore = timerCount("payment_processing_duration");
+
+        PaymentResponse completedPayment = paymentService.createPayment(
+                new PaymentRequest(new BigDecimal("90.00"), "BRL", "Metrics completed payment"),
+                "metrics-completed-payment-key"
+        );
+        PaymentResponse failedPayment = paymentService.createPayment(
+                new PaymentRequest(new BigDecimal("91.00"), "BRL", "Metrics failed payment"),
+                "metrics-failed-payment-key"
+        );
+
+        paymentService.completePayment(completedPayment.id());
+        paymentService.failPayment(failedPayment.id());
+
+        assertThat(counterCount("payments_created")).isEqualTo(createdBefore + 2);
+        assertThat(counterCount("payments_completed")).isEqualTo(completedBefore + 1);
+        assertThat(counterCount("payments_failed")).isEqualTo(failedBefore + 1);
+        assertThat(timerCount("payment_processing_duration")).isEqualTo(durationCountBefore + 2);
+    }
+
+    private double counterCount(String name) {
+        return meterRegistry.get(name).counter().count();
+    }
+
+    private long timerCount(String name) {
+        return meterRegistry.get(name).timer().count();
     }
 }

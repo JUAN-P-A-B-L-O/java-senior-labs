@@ -28,18 +28,36 @@ public class PaymentRequestedListener {
 
     @RabbitListener(queues = RabbitMqConfig.PAYMENT_PROCESS_QUEUE)
     public void listen(PaymentRequestedMessage message) {
-        if (processedEventService.isProcessed(message.eventId())) {
-            log.info("paymentRequested duplicated ignored: {}", message.eventId());
-            return;
-        }
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+            if (processedEventService.isProcessed(message.eventId())) {
+                log.info("PaymentRequested duplicate ignored. eventId={}", message.eventId());
+                return;
+            }
 
-        log.info("paymentRequested received: {}", message);
-        try {
-            paymentAuthorizationService.authorize(message);
-            outboxEventService.savePaymentProcessed(message.eventId(), message.paymentId());
-        } catch (PaymentAuthorizationException exception) {
-            outboxEventService.savePaymentProcessingFailed(message.eventId(), message.paymentId(), exception.getMessage());
+            log.info("PaymentRequested received. eventId={}", message.eventId());
+            try {
+                try {
+                    paymentAuthorizationService.authorize(message);
+                    outboxEventService.savePaymentProcessed(
+                            message.eventId(),
+                            message.traceId(),
+                            message.paymentId(),
+                            message.traceParent()
+                    );
+                } catch (PaymentAuthorizationException exception) {
+                    outboxEventService.savePaymentProcessingFailed(
+                            message.eventId(),
+                            message.traceId(),
+                            message.paymentId(),
+                            exception.getMessage(),
+                            message.traceParent()
+                    );
+                }
+                processedEventService.markProcessed(message.eventId());
+            } catch (RuntimeException exception) {
+                log.error("PaymentRequested processing failed. eventId={}", message.eventId(), exception);
+                throw exception;
+            }
         }
-        processedEventService.markProcessed(message.eventId());
     }
 }
