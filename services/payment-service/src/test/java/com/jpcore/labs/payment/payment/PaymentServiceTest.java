@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.interceptor.SimpleKey;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -33,6 +36,9 @@ class PaymentServiceTest {
 
     @Autowired
     private MeterRegistry meterRegistry;
+
+    @Autowired
+    private CacheManager cacheManager;
 
     @MockBean
     private PaymentRequestedPublisher paymentRequestedPublisher;
@@ -181,6 +187,28 @@ class PaymentServiceTest {
         assertThat(counterCount("payments_completed")).isEqualTo(completedBefore + 1);
         assertThat(counterCount("payments_failed")).isEqualTo(failedBefore + 1);
         assertThat(timerCount("payment_processing_duration")).isEqualTo(durationCountBefore + 2);
+    }
+
+    @Test
+    void createPaymentEvictsPaymentsCache() {
+        PaymentResponse existingPayment = paymentService.createPayment(
+                new PaymentRequest(new BigDecimal("92.00"), "BRL", "Cached payment"),
+                "cached-payment-key"
+        );
+
+        assertThat(paymentService.getPayments())
+                .extracting(PaymentResponse::id)
+                .contains(existingPayment.id());
+        Cache paymentsCache = cacheManager.getCache("payments");
+        assertThat(paymentsCache).isNotNull();
+        assertThat(paymentsCache.get(SimpleKey.EMPTY)).isNotNull();
+
+        paymentService.createPayment(
+                new PaymentRequest(new BigDecimal("93.00"), "BRL", "Evict payments cache"),
+                "evict-payments-cache-key"
+        );
+
+        assertThat(paymentsCache.get(SimpleKey.EMPTY)).isNull();
     }
 
     private double counterCount(String name) {

@@ -4,6 +4,8 @@ import com.jpcore.labs.payment.idempotency.IdempotencyService;
 import com.jpcore.labs.payment.idempotency.IdempotencyEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +43,7 @@ public class PaymentService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "payments", allEntries = true)
     public PaymentResponse createPayment(PaymentRequest request, String idempotencyKey) {
         String requestBodyHash = requestHash(request);
 
@@ -81,6 +84,7 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "payments")
     public List<PaymentResponse> getPayments() {
         return paymentRepository.findAll()
                 .stream()
@@ -89,11 +93,13 @@ public class PaymentService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void completePayment(String paymentId) {
         completePayment(paymentId, null);
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void completePayment(String paymentId, UUID traceId) {
         try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
             PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
@@ -112,11 +118,13 @@ public class PaymentService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void failPayment(String paymentId) {
         failPayment(paymentId, null);
     }
 
     @Transactional
+    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void failPayment(String paymentId, UUID traceId) {
         try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
             PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))

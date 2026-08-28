@@ -10,6 +10,12 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  cache:
+    type: simple
+  data:
+    redis:
+      repositories:
+        enabled: false
   rabbitmq:
     listener:
       simple:
@@ -21,3 +27,7 @@ spring:
           initial-interval: 2s
           multiplier: 1
           max-interval: 2s
+
+logging:
+  file:
+    path: ${LOG_DIR:${java.io.tmpdir}/java-senior-labs-test-logs/payment-service}
