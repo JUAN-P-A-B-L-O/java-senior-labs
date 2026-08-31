@@ -11,7 +11,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.interceptor.SimpleKey;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -190,7 +189,7 @@ class PaymentServiceTest {
     }
 
     @Test
-    void createPaymentEvictsPaymentsCache() {
+    void getPaymentsDoesNotUseCache() {
         PaymentResponse existingPayment = paymentService.createPayment(
                 new PaymentRequest(new BigDecimal("92.00"), "BRL", "Cached payment"),
                 "cached-payment-key"
@@ -199,16 +198,28 @@ class PaymentServiceTest {
         assertThat(paymentService.getPayments())
                 .extracting(PaymentResponse::id)
                 .contains(existingPayment.id());
-        Cache paymentsCache = cacheManager.getCache("payments");
-        assertThat(paymentsCache).isNotNull();
-        assertThat(paymentsCache.get(SimpleKey.EMPTY)).isNotNull();
 
-        paymentService.createPayment(
-                new PaymentRequest(new BigDecimal("93.00"), "BRL", "Evict payments cache"),
-                "evict-payments-cache-key"
+        assertThat(cacheManager.getCacheNames()).doesNotContain("payments");
+    }
+
+    @Test
+    void getPaymentCachesPaymentByIdAndEvictsWhenStatusChanges() {
+        PaymentResponse createdPayment = paymentService.createPayment(
+                new PaymentRequest(new BigDecimal("94.00"), "BRL", "Cached payment by id"),
+                "cached-payment-by-id-key"
         );
 
-        assertThat(paymentsCache.get(SimpleKey.EMPTY)).isNull();
+        PaymentResponse cachedPayment = paymentService.getPayment(createdPayment.id());
+
+        Cache paymentCache = cacheManager.getCache("payment");
+        assertThat(paymentCache).isNotNull();
+        assertThat(cachedPayment).isEqualTo(createdPayment);
+        assertThat(paymentCache.get(createdPayment.id())).isNotNull();
+
+        paymentService.completePayment(createdPayment.id());
+
+        assertThat(paymentCache.get(createdPayment.id())).isNull();
+        assertThat(paymentService.getPayment(createdPayment.id()).status()).isEqualTo(PaymentStatus.COMPLETED);
     }
 
     private double counterCount(String name) {

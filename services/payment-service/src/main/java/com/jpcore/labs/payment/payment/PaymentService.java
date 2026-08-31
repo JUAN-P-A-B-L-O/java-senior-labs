@@ -4,7 +4,6 @@ import com.jpcore.labs.payment.idempotency.IdempotencyService;
 import com.jpcore.labs.payment.idempotency.IdempotencyEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,21 +28,23 @@ public class PaymentService {
     private final IdempotencyService idempotencyService;
     private final PaymentRequestedPublisher paymentRequestedPublisher;
     private final PaymentMetrics paymentMetrics;
+    private final PaymentCacheInvalidationService paymentCacheInvalidationService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             IdempotencyService idempotencyService,
             PaymentRequestedPublisher paymentRequestedPublisher,
-            PaymentMetrics paymentMetrics
+            PaymentMetrics paymentMetrics,
+            PaymentCacheInvalidationService paymentCacheInvalidationService
     ) {
         this.paymentRepository = paymentRepository;
         this.idempotencyService = idempotencyService;
         this.paymentRequestedPublisher = paymentRequestedPublisher;
         this.paymentMetrics = paymentMetrics;
+        this.paymentCacheInvalidationService = paymentCacheInvalidationService;
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "payments", allEntries = true)
     public PaymentResponse createPayment(PaymentRequest request, String idempotencyKey) {
         String requestBodyHash = requestHash(request);
 
@@ -84,7 +85,6 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "payments")
     public List<PaymentResponse> getPayments() {
         return paymentRepository.findAll()
                 .stream()
@@ -92,22 +92,29 @@ public class PaymentService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "payment", key = "#paymentId")
+    public PaymentResponse getPayment(String paymentId) {
+        return paymentRepository.findById(UUID.fromString(paymentId))
+                .map(this::toResponse)
+                .orElseThrow(() -> new PaymentNotFoundException(paymentId));
+    }
+
     @Transactional
-    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void completePayment(String paymentId) {
         completePayment(paymentId, null);
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void completePayment(String paymentId, UUID traceId) {
         try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
             PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
-                    .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+                    .orElseThrow(() -> new PaymentNotFoundException(paymentId));
             if (payment.getStatus() == PaymentStatus.PROCESSING) {
                 payment.markCompleted();
                 paymentMetrics.recordCompleted(processingDuration(payment));
                 log.info("Payment status updated. status={}", payment.getStatus());
+                paymentCacheInvalidationService.invalidatePaymentAfterCommit(paymentId);
             } else {
                 log.warn("Payment status update ignored. status={} requestedStatus={}",
                         payment.getStatus(),
@@ -118,21 +125,20 @@ public class PaymentService {
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void failPayment(String paymentId) {
         failPayment(paymentId, null);
     }
 
     @Transactional
-    @CacheEvict(cacheNames = "payments", allEntries = true)
     public void failPayment(String paymentId, UUID traceId) {
         try (PaymentLogContext ignored = PaymentLogContext.with(traceId, paymentId)) {
             PaymentEntity payment = paymentRepository.findById(java.util.UUID.fromString(paymentId))
-                    .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
+                    .orElseThrow(() -> new PaymentNotFoundException(paymentId));
             if (payment.getStatus() == PaymentStatus.PROCESSING) {
                 payment.markFailed();
                 paymentMetrics.recordFailed(processingDuration(payment));
                 log.info("Payment status updated. status={}", payment.getStatus());
+                paymentCacheInvalidationService.invalidatePaymentAfterCommit(paymentId);
             } else {
                 log.warn("Payment status update ignored. status={} requestedStatus={}",
                         payment.getStatus(),
