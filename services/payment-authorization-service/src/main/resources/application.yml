@@ -1,0 +1,19 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: payment-authorization-service
+
+logging:
+  file:
+    path: ${LOG_DIR:${LOG_ROOT:/home/juaneugenio/programmig/java-senior-labs/logs}/payment-authorization-service}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

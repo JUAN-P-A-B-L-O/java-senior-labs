@@ -7,7 +7,7 @@ discovery.relabel "payment_lab" {
 
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex         = "/payment-lab-(payment|processor|rabbitmq|postgres|loki|grafana|alloy)"
+    regex         = "/payment-lab-(payment|processor|rabbitmq|postgres|grafana|alloy)"
     action        = "keep"
   }
 
