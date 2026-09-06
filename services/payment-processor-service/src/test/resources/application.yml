@@ -26,3 +26,6 @@ spring:
 
 payment-processor:
   authorization-url: http://localhost:8084/api/authorizations
+  authorization-timeout: 2s
+  authorization-max-attempts: 3
+  authorization-backoff: 1000ms

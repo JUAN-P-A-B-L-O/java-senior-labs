@@ -50,12 +50,12 @@
             "uid": "payment-lab-loki"
           },
           "editorMode": "builder",
-          "expr": "{service=~\"payment-service|payment-processor-service\"}",
+          "expr": "{service=~\"payment-service|payment-processor-service|payment-authorization-service\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Spring Service Logs",
+      "title": "Application Service Logs",
       "type": "logs"
     },
     {
@@ -87,12 +87,12 @@
             "uid": "payment-lab-loki"
           },
           "editorMode": "builder",
-          "expr": "{container=~\"payment-lab-loki|payment-lab-grafana|payment-lab-alloy\"}",
+          "expr": "{container=~\"payment-lab-postgres|payment-lab-rabbitmq|payment-lab-redis|payment-lab-grafana|payment-lab-prometheus|payment-lab-tempo|payment-lab-alloy\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Observability Container Logs",
+      "title": "Infrastructure Container Logs",
       "type": "logs"
     }
   ],

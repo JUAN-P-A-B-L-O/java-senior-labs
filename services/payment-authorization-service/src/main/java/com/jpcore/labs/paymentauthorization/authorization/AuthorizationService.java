@@ -12,7 +12,7 @@ import java.util.function.BooleanSupplier;
 public class AuthorizationService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthorizationService.class);
-    private static final Duration SIMULATED_AUTHORIZATION_DELAY = Duration.ofSeconds(5);
+    private static final Duration SIMULATED_AUTHORIZATION_DELAY = Duration.ofSeconds(3);
 
     private final BooleanSupplier authorizationDecision;
     private final Duration authorizationDelay;

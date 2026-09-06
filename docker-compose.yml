@@ -1,5 +1,13 @@
+x-payment-lab-logging: &payment-lab-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   postgres:
+    <<: *payment-lab-logging
     image: postgres:16-alpine
     container_name: payment-lab-postgres
     environment:
@@ -17,6 +25,7 @@ services:
       retries: 5
 
   rabbitmq:
+    <<: *payment-lab-logging
     image: rabbitmq:3.13-management-alpine
     container_name: payment-lab-rabbitmq
     ports:
@@ -29,6 +38,7 @@ services:
       retries: 5
 
   redis:
+    <<: *payment-lab-logging
     image: redis:7.4-alpine
     container_name: payment-lab-redis
     ports:
@@ -40,6 +50,7 @@ services:
       retries: 5
 
   loki:
+    <<: *payment-lab-logging
     image: grafana/loki:3.3.2
     container_name: payment-lab-loki
     command: -config.file=/etc/loki/loki-config.yml
@@ -57,6 +68,7 @@ services:
       retries: 5
 
   grafana:
+    <<: *payment-lab-logging
     image: grafana/grafana:11.4.0
     container_name: payment-lab-grafana
     networks:
@@ -78,6 +90,7 @@ services:
         condition: service_started
 
   prometheus:
+    <<: *payment-lab-logging
     image: prom/prometheus:v2.55.1
     container_name: payment-lab-prometheus
     networks:
@@ -91,6 +104,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   tempo:
+    <<: *payment-lab-logging
     image: grafana/tempo:2.6.1
     container_name: payment-lab-tempo
     user: "0"
@@ -105,6 +119,7 @@ services:
       - payment_lab_tempo_data:/tmp/tempo
 
   alloy:
+    <<: *payment-lab-logging
     image: grafana/alloy:v1.5.1
     container_name: payment-lab-alloy
     networks:

@@ -54,3 +54,6 @@ management:
 
 payment-processor:
   authorization-url: ${AUTHORIZATION_URL:http://localhost:8084/api/authorizations}
+  authorization-timeout: ${AUTHORIZATION_TIMEOUT:2s}
+  authorization-max-attempts: ${AUTHORIZATION_MAX_ATTEMPTS:3}
+  authorization-backoff: ${AUTHORIZATION_BACKOFF:1000ms}
