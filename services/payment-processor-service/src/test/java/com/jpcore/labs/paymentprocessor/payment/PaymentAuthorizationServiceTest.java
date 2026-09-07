@@ -1,5 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -45,6 +47,21 @@ class PaymentAuthorizationServiceTest {
                 .isInstanceOf(PaymentAuthorizationUnavailableException.class)
                 .hasMessage("Payment authorization unavailable for paymentId=payment-123")
                 .hasCauseInstanceOf(ResourceAccessException.class);
+    }
+
+    @Test
+    void throwsUnavailableExceptionWhenAuthorizationCircuitBreakerIsOpen() {
+        CircuitBreaker circuitBreaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        PaymentAuthorizationService service = new PaymentAuthorizationService(
+                ignored -> {
+                    throw CallNotPermittedException.createCallNotPermittedException(circuitBreaker);
+                }
+        );
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(PaymentAuthorizationUnavailableException.class)
+                .hasMessage("Payment authorization unavailable for paymentId=payment-123")
+                .hasCauseInstanceOf(CallNotPermittedException.class);
     }
 
     private PaymentRequestedMessage paymentRequestedMessage() {

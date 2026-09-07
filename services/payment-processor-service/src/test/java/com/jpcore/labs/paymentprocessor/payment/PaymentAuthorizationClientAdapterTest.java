@@ -1,5 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -7,12 +9,14 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.ExpectedCount.times;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
@@ -30,7 +34,8 @@ class PaymentAuthorizationClientAdapterTest {
         PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
                 restClientBuilder.build(),
                 "http://authorization-service/api/authorizations",
-                PaymentAuthorizationClientAdapter.retry(1, Duration.ZERO)
+                PaymentAuthorizationClientAdapter.retry(1, Duration.ZERO),
+                PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f)
         );
 
         server.expect(requestTo("http://authorization-service/api/authorizations"))
@@ -58,10 +63,12 @@ class PaymentAuthorizationClientAdapterTest {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
         Retry retry = PaymentAuthorizationClientAdapter.retry(3, Duration.ofMillis(1));
+        CircuitBreaker circuitBreaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
         PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
                 restClientBuilder.build(),
                 "http://authorization-service/api/authorizations",
-                retry
+                retry,
+                circuitBreaker
         );
 
         server.expect(times(2), requestTo("http://authorization-service/api/authorizations"))
@@ -86,6 +93,40 @@ class PaymentAuthorizationClientAdapterTest {
 
         assertThat(ReflectionTestUtils.getField(requestFactory, "connectTimeout")).isEqualTo(2000);
         assertThat(ReflectionTestUtils.getField(requestFactory, "readTimeout")).isEqualTo(2000);
+    }
+
+    @Test
+    void configuresAuthorizationApiCircuitBreaker() {
+        CircuitBreaker circuitBreaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+
+        assertThat(circuitBreaker.getCircuitBreakerConfig().getSlidingWindowSize()).isEqualTo(3);
+        assertThat(circuitBreaker.getCircuitBreakerConfig().getMinimumNumberOfCalls()).isEqualTo(3);
+        assertThat(circuitBreaker.getCircuitBreakerConfig().getFailureRateThreshold()).isEqualTo(50.0f);
+    }
+
+    @Test
+    void opensAuthorizationApiCircuitBreakerAfterThreeApiErrors() {
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        CircuitBreaker circuitBreaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
+                restClientBuilder.build(),
+                "http://authorization-service/api/authorizations",
+                PaymentAuthorizationClientAdapter.retry(1, Duration.ZERO),
+                circuitBreaker
+        );
+
+        server.expect(times(3), requestTo("http://authorization-service/api/authorizations"))
+                .andExpect(method(POST))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage())).isInstanceOf(RestClientException.class);
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage())).isInstanceOf(RestClientException.class);
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage())).isInstanceOf(RestClientException.class);
+
+        assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage())).isInstanceOf(CallNotPermittedException.class);
+        server.verify();
     }
 
     private PaymentRequestedMessage paymentRequestedMessage() {

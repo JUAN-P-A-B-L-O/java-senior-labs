@@ -57,3 +57,6 @@ payment-processor:
   authorization-timeout: ${AUTHORIZATION_TIMEOUT:2s}
   authorization-max-attempts: ${AUTHORIZATION_MAX_ATTEMPTS:3}
   authorization-backoff: ${AUTHORIZATION_BACKOFF:1000ms}
+  authorization-circuit-breaker-sliding-window-size: ${AUTHORIZATION_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE:3}
+  authorization-circuit-breaker-minimum-calls: ${AUTHORIZATION_CIRCUIT_BREAKER_MINIMUM_CALLS:3}
+  authorization-circuit-breaker-failure-rate-threshold: ${AUTHORIZATION_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD:50}

@@ -1,5 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import org.slf4j.Logger;
@@ -23,6 +25,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
     private final RestClient restClient;
     private final String authorizationUrl;
     private final Retry authorizationRetry;
+    private final CircuitBreaker authorizationCircuitBreaker;
 
     @Autowired
     PaymentAuthorizationClientAdapter(
@@ -30,21 +33,39 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
             @Value("${payment-processor.authorization-url}") String authorizationUrl,
             @Value("${payment-processor.authorization-timeout}") Duration authorizationTimeout,
             @Value("${payment-processor.authorization-max-attempts}") int authorizationMaxAttempts,
-            @Value("${payment-processor.authorization-backoff}") Duration authorizationBackoff
+            @Value("${payment-processor.authorization-backoff}") Duration authorizationBackoff,
+            @Value("${payment-processor.authorization-circuit-breaker-sliding-window-size}") int circuitBreakerSlidingWindowSize,
+            @Value("${payment-processor.authorization-circuit-breaker-minimum-calls}") int circuitBreakerMinimumCalls,
+            @Value("${payment-processor.authorization-circuit-breaker-failure-rate-threshold}") float circuitBreakerFailureRateThreshold
     ) {
         this(
                 restClientBuilder
                         .requestFactory(requestFactory(authorizationTimeout))
                         .build(),
                 authorizationUrl,
-                retry(authorizationMaxAttempts, authorizationBackoff)
+                retry(authorizationMaxAttempts, authorizationBackoff),
+                circuitBreaker(
+                        circuitBreakerSlidingWindowSize,
+                        circuitBreakerMinimumCalls,
+                        circuitBreakerFailureRateThreshold
+                )
         );
     }
 
     PaymentAuthorizationClientAdapter(RestClient restClient, String authorizationUrl, Retry authorizationRetry) {
+        this(restClient, authorizationUrl, authorizationRetry, circuitBreaker(3, 3, 50.0f));
+    }
+
+    PaymentAuthorizationClientAdapter(
+            RestClient restClient,
+            String authorizationUrl,
+            Retry authorizationRetry,
+            CircuitBreaker authorizationCircuitBreaker
+    ) {
         this.restClient = restClient;
         this.authorizationUrl = authorizationUrl;
         this.authorizationRetry = authorizationRetry;
+        this.authorizationCircuitBreaker = authorizationCircuitBreaker;
     }
 
     static SimpleClientHttpRequestFactory requestFactory(Duration timeout) {
@@ -72,9 +93,28 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
         return retry;
     }
 
+    static CircuitBreaker circuitBreaker(int slidingWindowSize, int minimumCalls, float failureRateThreshold) {
+        CircuitBreakerConfig circuitBreakerConfig = CircuitBreakerConfig.custom()
+                .slidingWindowType(CircuitBreakerConfig.SlidingWindowType.COUNT_BASED)
+                .slidingWindowSize(slidingWindowSize)
+                .minimumNumberOfCalls(minimumCalls)
+                .failureRateThreshold(failureRateThreshold)
+                .recordExceptions(RestClientException.class)
+                .build();
+        CircuitBreaker circuitBreaker = CircuitBreaker.of("paymentAuthorizationApi", circuitBreakerConfig);
+        circuitBreaker.getEventPublisher()
+                .onStateTransition(event -> log.warn(
+                        "Authorization API circuit breaker state changed. transition={}",
+                        event.getStateTransition()
+                ));
+        return circuitBreaker;
+    }
+
     @Override
     public AuthorizationResponse authorize(PaymentRequestedMessage message) {
-        return authorizationRetry.executeSupplier(() -> requestAuthorization(message));
+        return authorizationRetry.executeSupplier(
+                CircuitBreaker.decorateSupplier(authorizationCircuitBreaker, () -> requestAuthorization(message))
+        );
     }
 
     private AuthorizationResponse requestAuthorization(PaymentRequestedMessage message) {

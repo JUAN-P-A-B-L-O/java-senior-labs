@@ -1,5 +1,6 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,10 +20,12 @@ public class PaymentAuthorizationService {
     public boolean authorize(PaymentRequestedMessage message) {
         try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
             log.info("Authorization started. eventId={}", message.eventId());
+
             PaymentAuthorizationClient.AuthorizationResponse response;
+
             try {
                 response = authorizationClient.authorize(message);
-            } catch (RestClientException exception) {
+            } catch (RestClientException | CallNotPermittedException exception) {
                 log.warn("Authorization service unavailable. eventId={} paymentId={} message={}",
                         message.eventId(),
                         message.paymentId(),
