@@ -19,6 +19,12 @@ class AuthorizationServiceTest {
         assertThat(response.authorized()).isTrue();
     }
 
+    @Test
+    void selectsSimulatedAuthorizationDelay() {
+        assertThat(AuthorizationService.simulatedAuthorizationDelay(() -> false)).isEqualTo(Duration.ofSeconds(1));
+        assertThat(AuthorizationService.simulatedAuthorizationDelay(() -> true)).isEqualTo(Duration.ofSeconds(7));
+    }
+
     private AuthorizationRequest authorizationRequest() {
         return new AuthorizationRequest(
                 UUID.fromString("11111111-1111-1111-1111-111111111111"),
