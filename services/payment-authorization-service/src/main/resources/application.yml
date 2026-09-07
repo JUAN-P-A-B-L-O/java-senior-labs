@@ -5,6 +5,9 @@ spring:
   application:
     name: payment-authorization-service
 
+payment-authorization:
+  long-delay-probability-percent: ${AUTHORIZATION_LONG_DELAY_PROBABILITY_PERCENT:90}
+
 logging:
   file:
     path: ${LOG_DIR:${LOG_ROOT:/home/juaneugenio/programmig/java-senior-labs/logs}/payment-authorization-service}

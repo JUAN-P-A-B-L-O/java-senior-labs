@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 class AuthorizationServiceTest {
 
@@ -21,8 +22,20 @@ class AuthorizationServiceTest {
 
     @Test
     void selectsSimulatedAuthorizationDelay() {
-        assertThat(AuthorizationService.simulatedAuthorizationDelay(() -> false)).isEqualTo(Duration.ofSeconds(1));
-        assertThat(AuthorizationService.simulatedAuthorizationDelay(() -> true)).isEqualTo(Duration.ofSeconds(7));
+        assertThat(AuthorizationService.simulatedAuthorizationDelay(30, () -> 29)).isEqualTo(Duration.ofSeconds(7));
+        assertThat(AuthorizationService.simulatedAuthorizationDelay(30, () -> 30)).isEqualTo(Duration.ofSeconds(1));
+    }
+
+    @Test
+    void supportsNeverAndAlwaysUsingLongDelay() {
+        assertThat(AuthorizationService.simulatedAuthorizationDelay(0, () -> 0)).isEqualTo(Duration.ofSeconds(1));
+        assertThat(AuthorizationService.simulatedAuthorizationDelay(100, () -> 99)).isEqualTo(Duration.ofSeconds(7));
+    }
+
+    @Test
+    void rejectsInvalidLongDelayProbability() {
+        assertThatIllegalArgumentException().isThrownBy(() -> new AuthorizationService(-1));
+        assertThatIllegalArgumentException().isThrownBy(() -> new AuthorizationService(101));
     }
 
     private AuthorizationRequest authorizationRequest() {
