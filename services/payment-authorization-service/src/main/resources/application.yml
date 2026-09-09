@@ -6,7 +6,7 @@ spring:
     name: payment-authorization-service
 
 payment-authorization:
-  long-delay-probability-percent: ${AUTHORIZATION_LONG_DELAY_PROBABILITY_PERCENT:90}
+  long-delay-probability-percent: ${AUTHORIZATION_LONG_DELAY_PROBABILITY_PERCENT:0}
 
 logging:
   file:

@@ -29,9 +29,9 @@ spring:
         retry:
           enabled: true
           max-attempts: 3
-          initial-interval: 2s
+          initial-interval: ${PAYMENT_PROCESS_RETRY_INTERVAL:30s}
           multiplier: 1
-          max-interval: 2s
+          max-interval: ${PAYMENT_PROCESS_RETRY_INTERVAL:30s}
 
 logging:
   file:

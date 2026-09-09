@@ -61,11 +61,11 @@ class RabbitMqConfigTest {
         assertThat(environment.getProperty("spring.rabbitmq.listener.simple.retry.max-attempts", Integer.class))
                 .isEqualTo(3);
         assertThat(environment.getProperty("spring.rabbitmq.listener.simple.retry.initial-interval"))
-                .isEqualTo("2s");
+                .isEqualTo("30s");
         assertThat(environment.getProperty("spring.rabbitmq.listener.simple.retry.multiplier", Integer.class))
                 .isEqualTo(1);
         assertThat(environment.getProperty("spring.rabbitmq.listener.simple.retry.max-interval"))
-                .isEqualTo("2s");
+                .isEqualTo("30s");
     }
 
     @Test

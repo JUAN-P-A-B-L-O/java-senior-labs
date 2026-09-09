@@ -50,7 +50,7 @@ class PaymentAuthorizationServiceTest {
     }
 
     @Test
-    void throwsUnavailableExceptionWhenAuthorizationCircuitBreakerIsOpen() {
+    void throwsTemporarilyUnavailableExceptionWhenAuthorizationCircuitBreakerIsOpen() {
         CircuitBreaker circuitBreaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
         PaymentAuthorizationService service = new PaymentAuthorizationService(
                 ignored -> {
@@ -59,8 +59,8 @@ class PaymentAuthorizationServiceTest {
         );
 
         assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
-                .isInstanceOf(PaymentAuthorizationUnavailableException.class)
-                .hasMessage("Payment authorization unavailable for paymentId=payment-123")
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasMessage("Payment authorization temporarily unavailable: circuit breaker open for paymentId=payment-123")
                 .hasCauseInstanceOf(CallNotPermittedException.class);
     }
 

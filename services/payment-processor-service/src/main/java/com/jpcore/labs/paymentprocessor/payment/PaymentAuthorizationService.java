@@ -25,7 +25,15 @@ public class PaymentAuthorizationService {
 
             try {
                 response = authorizationClient.authorize(message);
-            } catch (RestClientException | CallNotPermittedException exception) {
+            } catch (CallNotPermittedException exception) {
+                log.warn("Authorization circuit breaker rejected request. eventId={} paymentId={}",
+                        message.eventId(), message.paymentId());
+                throw new AuthorizationTemporarilyUnavailableException(
+                        "Payment authorization temporarily unavailable: circuit breaker open for paymentId="
+                                + message.paymentId(),
+                        exception
+                );
+            } catch (RestClientException exception) {
                 log.warn("Authorization service unavailable. eventId={} paymentId={} message={}",
                         message.eventId(),
                         message.paymentId(),
