@@ -1,5 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -16,6 +18,9 @@ import org.springframework.web.client.RestClientException;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -191,6 +196,79 @@ class PaymentAuthorizationClientAdapterTest {
                 .isInstanceOf(CallNotPermittedException.class);
 
         assertThat(limiter.getMetrics().getAvailablePermissions()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    void rejectsConcurrentCallAndReusesPermitAfterCompletion() throws Exception {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CircuitBreaker breaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        RateLimiter limiter = PaymentAuthorizationClientAdapter.rateLimiter(5, Duration.ofHours(1), Duration.ZERO);
+        Bulkhead bulkhead = PaymentAuthorizationClientAdapter.bulkhead(1, Duration.ZERO);
+        PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
+                builder.build(), "http://authorization-service/api/authorizations",
+                PaymentAuthorizationClientAdapter.retry(3, Duration.ZERO), breaker, limiter, bulkhead
+        );
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        server.expect(requestTo("http://authorization-service/api/authorizations"))
+                .andRespond(request -> {
+                    entered.countDown();
+                    try {
+                        if (!release.await(5, TimeUnit.SECONDS)) {
+                            throw new AssertionError("Timed out waiting to release authorization request");
+                        }
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError(exception);
+                    }
+                    return withSuccess("{\"authorized\":true}", MediaType.APPLICATION_JSON)
+                            .createResponse(request);
+                });
+        server.expect(requestTo("http://authorization-service/api/authorizations"))
+                .andRespond(withSuccess("{\"authorized\":true}", MediaType.APPLICATION_JSON));
+
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var firstCall = executor.submit(() -> client.authorize(paymentRequestedMessage()));
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                assertThatThrownBy(() -> client.authorize(paymentRequestedMessage()))
+                        .isInstanceOf(BulkheadFullException.class);
+                assertThat(breaker.getMetrics().getNumberOfBufferedCalls()).isZero();
+                assertThat(limiter.getMetrics().getAvailablePermissions()).isEqualTo(4);
+            } finally {
+                release.countDown();
+            }
+            assertThat(firstCall.get(5, TimeUnit.SECONDS).authorized()).isTrue();
+        }
+
+        assertThat(client.authorize(paymentRequestedMessage()).authorized()).isTrue();
+        assertThat(bulkhead.getMetrics().getAvailableConcurrentCalls()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    void releasesBulkheadPermitOnApiFailureAndBeforeRetryBackoff() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        Bulkhead bulkhead = PaymentAuthorizationClientAdapter.bulkhead(1, Duration.ZERO);
+        Retry retry = PaymentAuthorizationClientAdapter.retry(2, Duration.ofMillis(1));
+        retry.getEventPublisher().onRetry(event ->
+                assertThat(bulkhead.getMetrics().getAvailableConcurrentCalls()).isEqualTo(1));
+        PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
+                builder.build(), "http://authorization-service/api/authorizations",
+                retry, PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f),
+                PaymentAuthorizationClientAdapter.rateLimiter(5, Duration.ofHours(1), Duration.ZERO),
+                bulkhead
+        );
+        server.expect(times(2), requestTo("http://authorization-service/api/authorizations"))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage()))
+                .isInstanceOf(RestClientException.class);
+
+        assertThat(bulkhead.getMetrics().getAvailableConcurrentCalls()).isEqualTo(1);
         server.verify();
     }
 

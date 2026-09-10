@@ -1,5 +1,6 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.slf4j.Logger;
@@ -39,6 +40,14 @@ public class PaymentAuthorizationService {
                         message.eventId(), message.paymentId());
                 throw new AuthorizationTemporarilyUnavailableException(
                         "Payment authorization temporarily unavailable: rate limit exceeded for paymentId="
+                                + message.paymentId(),
+                        exception
+                );
+            } catch (BulkheadFullException exception) {
+                log.warn("Authorization bulkhead rejected request. eventId={} paymentId={}",
+                        message.eventId(), message.paymentId());
+                throw new AuthorizationTemporarilyUnavailableException(
+                        "Payment authorization temporarily unavailable: bulkhead full for paymentId="
                                 + message.paymentId(),
                         exception
                 );

@@ -1,5 +1,8 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadConfig;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -30,6 +33,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
     private final Retry authorizationRetry;
     private final CircuitBreaker authorizationCircuitBreaker;
     private final RateLimiter authorizationRateLimiter;
+    private final Bulkhead authorizationBulkhead;
 
     @Autowired
     PaymentAuthorizationClientAdapter(
@@ -43,7 +47,9 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
             @Value("${payment-processor.authorization-circuit-breaker-failure-rate-threshold}") float circuitBreakerFailureRateThreshold,
             @Value("${payment-processor.authorization-rate-limit-for-period}") int rateLimitForPeriod,
             @Value("${payment-processor.authorization-rate-limit-refresh-period}") Duration rateLimitRefreshPeriod,
-            @Value("${payment-processor.authorization-rate-limit-timeout}") Duration rateLimitTimeout
+            @Value("${payment-processor.authorization-rate-limit-timeout}") Duration rateLimitTimeout,
+            @Value("${payment-processor.authorization-bulkhead-max-concurrent-calls}") int bulkheadMaxConcurrentCalls,
+            @Value("${payment-processor.authorization-bulkhead-max-wait-duration}") Duration bulkheadMaxWaitDuration
     ) {
         this(
                 restClientBuilder
@@ -56,7 +62,8 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
                         circuitBreakerMinimumCalls,
                         circuitBreakerFailureRateThreshold
                 ),
-                rateLimiter(rateLimitForPeriod, rateLimitRefreshPeriod, rateLimitTimeout)
+                rateLimiter(rateLimitForPeriod, rateLimitRefreshPeriod, rateLimitTimeout),
+                bulkhead(bulkheadMaxConcurrentCalls, bulkheadMaxWaitDuration)
         );
     }
 
@@ -81,11 +88,24 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
             CircuitBreaker authorizationCircuitBreaker,
             RateLimiter authorizationRateLimiter
     ) {
+        this(restClient, authorizationUrl, authorizationRetry, authorizationCircuitBreaker,
+                authorizationRateLimiter, bulkhead(2, Duration.ZERO));
+    }
+
+    PaymentAuthorizationClientAdapter(
+            RestClient restClient,
+            String authorizationUrl,
+            Retry authorizationRetry,
+            CircuitBreaker authorizationCircuitBreaker,
+            RateLimiter authorizationRateLimiter,
+            Bulkhead authorizationBulkhead
+    ) {
         this.restClient = restClient;
         this.authorizationUrl = authorizationUrl;
         this.authorizationRetry = authorizationRetry;
         this.authorizationCircuitBreaker = authorizationCircuitBreaker;
         this.authorizationRateLimiter = authorizationRateLimiter;
+        this.authorizationBulkhead = authorizationBulkhead;
     }
 
     static SimpleClientHttpRequestFactory requestFactory(Duration timeout) {
@@ -119,7 +139,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
                 .slidingWindowSize(slidingWindowSize)
                 .minimumNumberOfCalls(minimumCalls)
                 .failureRateThreshold(failureRateThreshold)
-                .ignoreExceptions(RequestNotPermitted.class)
+                .ignoreExceptions(RequestNotPermitted.class, BulkheadFullException.class)
                 .recordExceptions(RestClientException.class)
                 .build();
         CircuitBreaker circuitBreaker = CircuitBreaker.of("paymentAuthorizationApi", circuitBreakerConfig);
@@ -140,11 +160,21 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
         return RateLimiter.of("paymentAuthorizationApi", config);
     }
 
+    static Bulkhead bulkhead(int maxConcurrentCalls, Duration maxWaitDuration) {
+        BulkheadConfig config = BulkheadConfig.custom()
+                .maxConcurrentCalls(maxConcurrentCalls)
+                .maxWaitDuration(maxWaitDuration)
+                .build();
+        return Bulkhead.of("paymentAuthorizationApi", config);
+    }
+
     @Override
     public AuthorizationResponse authorize(PaymentRequestedMessage message) {
         return authorizationRetry.executeSupplier(
                 CircuitBreaker.decorateSupplier(authorizationCircuitBreaker,
-                        RateLimiter.decorateSupplier(authorizationRateLimiter, () -> requestAuthorization(message)))
+                        Bulkhead.decorateSupplier(authorizationBulkhead,
+                                RateLimiter.decorateSupplier(authorizationRateLimiter,
+                                        () -> requestAuthorization(message))))
         );
     }
 

@@ -35,3 +35,5 @@ payment-processor:
   authorization-rate-limit-for-period: 5
   authorization-rate-limit-refresh-period: 1s
   authorization-rate-limit-timeout: 0s
+  authorization-bulkhead-max-concurrent-calls: 2
+  authorization-bulkhead-max-wait-duration: 0s

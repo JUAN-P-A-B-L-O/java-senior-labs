@@ -64,3 +64,6 @@ payment-processor:
   authorization-rate-limit-for-period: ${AUTHORIZATION_RATE_LIMIT_FOR_PERIOD:5}
   authorization-rate-limit-refresh-period: ${AUTHORIZATION_RATE_LIMIT_REFRESH_PERIOD:1s}
   authorization-rate-limit-timeout: ${AUTHORIZATION_RATE_LIMIT_TIMEOUT:0s}
+  # Per processor instance; permits are released before HTTP retry backoff.
+  authorization-bulkhead-max-concurrent-calls: ${AUTHORIZATION_BULKHEAD_MAX_CONCURRENT_CALLS:2}
+  authorization-bulkhead-max-wait-duration: ${AUTHORIZATION_BULKHEAD_MAX_WAIT_DURATION:0s}

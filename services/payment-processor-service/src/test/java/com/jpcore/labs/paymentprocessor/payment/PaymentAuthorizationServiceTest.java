@@ -1,5 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.RateLimiter;
@@ -78,6 +80,19 @@ class PaymentAuthorizationServiceTest {
                 .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
                 .hasMessage("Payment authorization temporarily unavailable: rate limit exceeded for paymentId=payment-123")
                 .hasCauseInstanceOf(RequestNotPermitted.class);
+    }
+
+    @Test
+    void throwsTemporarilyUnavailableExceptionWhenAuthorizationBulkheadIsFull() {
+        Bulkhead bulkhead = PaymentAuthorizationClientAdapter.bulkhead(1, Duration.ZERO);
+        PaymentAuthorizationService service = new PaymentAuthorizationService(ignored -> {
+            throw BulkheadFullException.createBulkheadFullException(bulkhead);
+        });
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasMessage("Payment authorization temporarily unavailable: bulkhead full for paymentId=payment-123")
+                .hasCauseInstanceOf(BulkheadFullException.class);
     }
 
     private PaymentRequestedMessage paymentRequestedMessage() {
