@@ -2,6 +2,9 @@ package com.jpcore.labs.paymentprocessor.payment;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import org.slf4j.Logger;
@@ -26,6 +29,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
     private final String authorizationUrl;
     private final Retry authorizationRetry;
     private final CircuitBreaker authorizationCircuitBreaker;
+    private final RateLimiter authorizationRateLimiter;
 
     @Autowired
     PaymentAuthorizationClientAdapter(
@@ -36,7 +40,10 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
             @Value("${payment-processor.authorization-backoff}") Duration authorizationBackoff,
             @Value("${payment-processor.authorization-circuit-breaker-sliding-window-size}") int circuitBreakerSlidingWindowSize,
             @Value("${payment-processor.authorization-circuit-breaker-minimum-calls}") int circuitBreakerMinimumCalls,
-            @Value("${payment-processor.authorization-circuit-breaker-failure-rate-threshold}") float circuitBreakerFailureRateThreshold
+            @Value("${payment-processor.authorization-circuit-breaker-failure-rate-threshold}") float circuitBreakerFailureRateThreshold,
+            @Value("${payment-processor.authorization-rate-limit-for-period}") int rateLimitForPeriod,
+            @Value("${payment-processor.authorization-rate-limit-refresh-period}") Duration rateLimitRefreshPeriod,
+            @Value("${payment-processor.authorization-rate-limit-timeout}") Duration rateLimitTimeout
     ) {
         this(
                 restClientBuilder
@@ -48,7 +55,8 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
                         circuitBreakerSlidingWindowSize,
                         circuitBreakerMinimumCalls,
                         circuitBreakerFailureRateThreshold
-                )
+                ),
+                rateLimiter(rateLimitForPeriod, rateLimitRefreshPeriod, rateLimitTimeout)
         );
     }
 
@@ -62,10 +70,22 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
             Retry authorizationRetry,
             CircuitBreaker authorizationCircuitBreaker
     ) {
+        this(restClient, authorizationUrl, authorizationRetry, authorizationCircuitBreaker,
+                rateLimiter(5, Duration.ofSeconds(1), Duration.ZERO));
+    }
+
+    PaymentAuthorizationClientAdapter(
+            RestClient restClient,
+            String authorizationUrl,
+            Retry authorizationRetry,
+            CircuitBreaker authorizationCircuitBreaker,
+            RateLimiter authorizationRateLimiter
+    ) {
         this.restClient = restClient;
         this.authorizationUrl = authorizationUrl;
         this.authorizationRetry = authorizationRetry;
         this.authorizationCircuitBreaker = authorizationCircuitBreaker;
+        this.authorizationRateLimiter = authorizationRateLimiter;
     }
 
     static SimpleClientHttpRequestFactory requestFactory(Duration timeout) {
@@ -99,6 +119,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
                 .slidingWindowSize(slidingWindowSize)
                 .minimumNumberOfCalls(minimumCalls)
                 .failureRateThreshold(failureRateThreshold)
+                .ignoreExceptions(RequestNotPermitted.class)
                 .recordExceptions(RestClientException.class)
                 .build();
         CircuitBreaker circuitBreaker = CircuitBreaker.of("paymentAuthorizationApi", circuitBreakerConfig);
@@ -110,10 +131,20 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
         return circuitBreaker;
     }
 
+    static RateLimiter rateLimiter(int limitForPeriod, Duration refreshPeriod, Duration timeout) {
+        RateLimiterConfig config = RateLimiterConfig.custom()
+                .limitForPeriod(limitForPeriod)
+                .limitRefreshPeriod(refreshPeriod)
+                .timeoutDuration(timeout)
+                .build();
+        return RateLimiter.of("paymentAuthorizationApi", config);
+    }
+
     @Override
     public AuthorizationResponse authorize(PaymentRequestedMessage message) {
         return authorizationRetry.executeSupplier(
-                CircuitBreaker.decorateSupplier(authorizationCircuitBreaker, () -> requestAuthorization(message))
+                CircuitBreaker.decorateSupplier(authorizationCircuitBreaker,
+                        RateLimiter.decorateSupplier(authorizationRateLimiter, () -> requestAuthorization(message)))
         );
     }
 

@@ -2,10 +2,13 @@ package com.jpcore.labs.paymentprocessor.payment;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,6 +65,19 @@ class PaymentAuthorizationServiceTest {
                 .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
                 .hasMessage("Payment authorization temporarily unavailable: circuit breaker open for paymentId=payment-123")
                 .hasCauseInstanceOf(CallNotPermittedException.class);
+    }
+
+    @Test
+    void throwsTemporarilyUnavailableExceptionWhenAuthorizationRateLimitIsExceeded() {
+        RateLimiter limiter = PaymentAuthorizationClientAdapter.rateLimiter(1, Duration.ofHours(1), Duration.ZERO);
+        PaymentAuthorizationService service = new PaymentAuthorizationService(ignored -> {
+            throw RequestNotPermitted.createRequestNotPermitted(limiter);
+        });
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasMessage("Payment authorization temporarily unavailable: rate limit exceeded for paymentId=payment-123")
+                .hasCauseInstanceOf(RequestNotPermitted.class);
     }
 
     private PaymentRequestedMessage paymentRequestedMessage() {

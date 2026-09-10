@@ -1,6 +1,7 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,14 @@ public class PaymentAuthorizationService {
                         message.eventId(), message.paymentId());
                 throw new AuthorizationTemporarilyUnavailableException(
                         "Payment authorization temporarily unavailable: circuit breaker open for paymentId="
+                                + message.paymentId(),
+                        exception
+                );
+            } catch (RequestNotPermitted exception) {
+                log.warn("Authorization rate limiter rejected request. eventId={} paymentId={}",
+                        message.eventId(), message.paymentId());
+                throw new AuthorizationTemporarilyUnavailableException(
+                        "Payment authorization temporarily unavailable: rate limit exceeded for paymentId="
                                 + message.paymentId(),
                         exception
                 );

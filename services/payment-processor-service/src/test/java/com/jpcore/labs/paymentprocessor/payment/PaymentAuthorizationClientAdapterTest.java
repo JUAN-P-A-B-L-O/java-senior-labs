@@ -2,6 +2,8 @@ package com.jpcore.labs.paymentprocessor.payment;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import io.github.resilience4j.retry.Retry;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -126,6 +128,69 @@ class PaymentAuthorizationClientAdapterTest {
 
         assertThat(circuitBreaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
         assertThatThrownBy(() -> client.authorize(paymentRequestedMessage())).isInstanceOf(CallNotPermittedException.class);
+        server.verify();
+    }
+
+    @Test
+    void rejectsExcessCallsWithoutContactingApiOrRecordingCircuitBreakerOutcome() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CircuitBreaker breaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        RateLimiter limiter = PaymentAuthorizationClientAdapter.rateLimiter(1, Duration.ofHours(1), Duration.ZERO);
+        PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
+                builder.build(), "http://authorization-service/api/authorizations",
+                PaymentAuthorizationClientAdapter.retry(3, Duration.ZERO), breaker, limiter
+        );
+        server.expect(requestTo("http://authorization-service/api/authorizations"))
+                .andRespond(withSuccess("{\"authorized\":true}", MediaType.APPLICATION_JSON));
+
+        assertThat(client.authorize(paymentRequestedMessage()).authorized()).isTrue();
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage()))
+                .isInstanceOf(RequestNotPermitted.class);
+
+        assertThat(breaker.getMetrics().getNumberOfBufferedCalls()).isEqualTo(1);
+        assertThat(breaker.getMetrics().getNumberOfFailedCalls()).isZero();
+        server.verify();
+    }
+
+    @Test
+    void retryAttemptsConsumeRateLimitPermits() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CircuitBreaker breaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
+                builder.build(), "http://authorization-service/api/authorizations",
+                PaymentAuthorizationClientAdapter.retry(3, Duration.ZERO), breaker,
+                PaymentAuthorizationClientAdapter.rateLimiter(2, Duration.ofHours(1), Duration.ZERO)
+        );
+        server.expect(times(2), requestTo("http://authorization-service/api/authorizations"))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage()))
+                .isInstanceOf(RequestNotPermitted.class);
+
+        assertThat(breaker.getMetrics().getNumberOfFailedCalls()).isEqualTo(2);
+        assertThat(breaker.getMetrics().getNumberOfBufferedCalls()).isEqualTo(2);
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        server.verify();
+    }
+
+    @Test
+    void openCircuitDoesNotConsumeRateLimitPermits() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        CircuitBreaker breaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        breaker.transitionToOpenState();
+        RateLimiter limiter = PaymentAuthorizationClientAdapter.rateLimiter(1, Duration.ofHours(1), Duration.ZERO);
+        PaymentAuthorizationClientAdapter client = new PaymentAuthorizationClientAdapter(
+                builder.build(), "http://authorization-service/api/authorizations",
+                PaymentAuthorizationClientAdapter.retry(3, Duration.ZERO), breaker, limiter
+        );
+
+        assertThatThrownBy(() -> client.authorize(paymentRequestedMessage()))
+                .isInstanceOf(CallNotPermittedException.class);
+
+        assertThat(limiter.getMetrics().getAvailablePermissions()).isEqualTo(1);
         server.verify();
     }
 

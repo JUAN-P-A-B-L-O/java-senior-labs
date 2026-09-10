@@ -60,3 +60,7 @@ payment-processor:
   authorization-circuit-breaker-sliding-window-size: ${AUTHORIZATION_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE:3}
   authorization-circuit-breaker-minimum-calls: ${AUTHORIZATION_CIRCUIT_BREAKER_MINIMUM_CALLS:3}
   authorization-circuit-breaker-failure-rate-threshold: ${AUTHORIZATION_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD:50}
+  # Per processor instance; each HTTP attempt, including retries, consumes a permit.
+  authorization-rate-limit-for-period: ${AUTHORIZATION_RATE_LIMIT_FOR_PERIOD:5}
+  authorization-rate-limit-refresh-period: ${AUTHORIZATION_RATE_LIMIT_REFRESH_PERIOD:1s}
+  authorization-rate-limit-timeout: ${AUTHORIZATION_RATE_LIMIT_TIMEOUT:0s}
