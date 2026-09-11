@@ -7,5 +7,5 @@ import java.util.UUID;
 
 public interface OutboxEventRepository extends JpaRepository<OutboxEventEntity, UUID> {
 
-    List<OutboxEventEntity> findByStatusOrderByCreatedAtAsc(OutboxEventStatus status);
+    List<OutboxEventEntity> findByStatusAndEventTypeInOrderByCreatedAtAsc(OutboxEventStatus status, List<String> eventTypes);
 }

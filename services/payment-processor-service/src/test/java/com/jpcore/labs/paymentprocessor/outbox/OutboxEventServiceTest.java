@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 class OutboxEventServiceTest {
@@ -34,8 +35,18 @@ class OutboxEventServiceTest {
 
         OutboxEventEntity result = service.savePaymentProcessed(REQUESTED_EVENT_ID, TRACE_ID, PAYMENT_ID);
 
-        verify(repository).saveAndFlush(captor.capture());
-        assertThat(result).isSameAs(captor.getValue());
+        verify(repository, times(2)).saveAndFlush(captor.capture());
+        assertThat(result).isSameAs(captor.getAllValues().getFirst());
+        OutboxEventEntity kafkaEvent = captor.getAllValues().getLast();
+        assertThat(kafkaEvent.getEventType()).isEqualTo(OutboxEventService.PAYMENT_PROCESSED_KAFKA);
+        assertThat(kafkaEvent.getEventId()).isNotEqualTo(result.getEventId());
+        assertThat(kafkaEvent.getStatus()).isEqualTo(OutboxEventStatus.WAITING_PUBLISH);
+        PaymentProcessedMessage kafkaMessage = (PaymentProcessedMessage) service.toMessage(kafkaEvent);
+        assertThat(kafkaMessage.eventId()).isEqualTo(kafkaEvent.getEventId());
+        assertThat(kafkaMessage.paymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(kafkaMessage.requestedEventId()).isEqualTo(REQUESTED_EVENT_ID);
+        assertThat(kafkaMessage.traceId()).isEqualTo(TRACE_ID);
+        assertThat(kafkaMessage.traceParent()).isEqualTo(traceContextProvider.currentTraceParent());
         assertThat(result.getEventId()).isNotNull();
         assertThat(result.getAggregateId()).isEqualTo(UUID.fromString(PAYMENT_ID));
         assertThat(result.getEventType()).isEqualTo(OutboxEventService.PAYMENT_PROCESSED);
@@ -64,6 +75,7 @@ class OutboxEventServiceTest {
         assertThat(result.getPayload()).contains("\"traceId\":\"33333333-3333-3333-3333-333333333333\"");
         assertThat(result.getPayload()).contains("\"traceParent\":\"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\"");
         assertThat(result.getPayload()).contains("\"reason\":\"denied\"");
+        verify(repository).saveAndFlush(any(OutboxEventEntity.class));
     }
 
     @Test

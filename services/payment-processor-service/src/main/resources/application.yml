@@ -14,6 +14,17 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
   rabbitmq:
     publisher-confirm-type: correlated
     publisher-returns: true
@@ -67,3 +78,7 @@ payment-processor:
   # Per processor instance; permits are released before HTTP retry backoff.
   authorization-bulkhead-max-concurrent-calls: ${AUTHORIZATION_BULKHEAD_MAX_CONCURRENT_CALLS:2}
   authorization-bulkhead-max-wait-duration: ${AUTHORIZATION_BULKHEAD_MAX_WAIT_DURATION:0s}
+  kafka:
+    enabled: ${KAFKA_PUBLISHER_ENABLED:true}
+    payment-processed-topic: ${KAFKA_PAYMENT_PROCESSED_TOPIC:payment.processed}
+    publish-timeout: ${KAFKA_PUBLISH_TIMEOUT:15s}

@@ -37,3 +37,5 @@ payment-processor:
   authorization-rate-limit-timeout: 0s
   authorization-bulkhead-max-concurrent-calls: 2
   authorization-bulkhead-max-wait-duration: 0s
+  kafka:
+    enabled: false

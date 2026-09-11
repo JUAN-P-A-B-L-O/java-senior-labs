@@ -20,6 +20,7 @@ public class OutboxEventService {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxEventService.class);
 
+    public static final String PAYMENT_PROCESSED_KAFKA = "PaymentProcessedKafka";
     public static final String PAYMENT_PROCESSED = "PaymentProcessed";
     public static final String PAYMENT_PROCESSING_FAILED = "PaymentProcessingFailed";
 
@@ -63,6 +64,11 @@ public class OutboxEventService {
                     currentOrFallbackTraceParent(fallbackTraceParent)
             );
             OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
+            PaymentProcessedMessage kafkaMessage = new PaymentProcessedMessage(
+                    UUID.randomUUID(), message.traceId(), message.requestedEventId(),
+                    message.paymentId(), message.traceParent()
+            );
+            save(kafkaMessage.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED_KAFKA, kafkaMessage);
             log.info("Result event saved to outbox. eventId={} eventType={} requestedEventId={}",
                     outboxEvent.getEventId(),
                     outboxEvent.getEventType(),
@@ -111,12 +117,20 @@ public class OutboxEventService {
 
     @Transactional(readOnly = true)
     public List<OutboxEventEntity> findWaitingPublish() {
-        return outboxEventRepository.findByStatusOrderByCreatedAtAsc(OutboxEventStatus.WAITING_PUBLISH);
+        return outboxEventRepository.findByStatusAndEventTypeInOrderByCreatedAtAsc(
+                OutboxEventStatus.WAITING_PUBLISH, List.of(PAYMENT_PROCESSED, PAYMENT_PROCESSING_FAILED));
+    }
+
+    @Transactional(readOnly = true)
+    public List<OutboxEventEntity> findWaitingKafkaPublish() {
+        return outboxEventRepository.findByStatusAndEventTypeInOrderByCreatedAtAsc(
+                OutboxEventStatus.WAITING_PUBLISH, List.of(PAYMENT_PROCESSED_KAFKA));
     }
 
     public Object toMessage(OutboxEventEntity outboxEvent) {
         try {
-            if (PAYMENT_PROCESSED.equals(outboxEvent.getEventType())) {
+            if (PAYMENT_PROCESSED.equals(outboxEvent.getEventType())
+                    || PAYMENT_PROCESSED_KAFKA.equals(outboxEvent.getEventType())) {
                 return objectMapper.readValue(outboxEvent.getPayload(), PaymentProcessedMessage.class);
             }
             if (PAYMENT_PROCESSING_FAILED.equals(outboxEvent.getEventType())) {
