@@ -35,6 +35,25 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class PaymentAuthorizationClientAdapterTest {
 
     @Test
+    void sendsTheResolvedCallerAsBearerAuthentication() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new PaymentAuthorizationClientAdapter(builder.build(),
+                "http://authorization-service/api/authorizations",
+                PaymentAuthorizationClientAdapter.retry(1, Duration.ZERO));
+        var tokens = org.mockito.Mockito.mock(com.jpcore.labs.paymentprocessor.security.CallerTokenProvider.class);
+        var message = paymentRequestedMessage();
+        org.mockito.Mockito.when(tokens.tokenFor(message)).thenReturn("resolved-caller-token");
+        ReflectionTestUtils.setField(client, "callerTokens", tokens);
+        server.expect(requestTo("http://authorization-service/api/authorizations"))
+                .andExpect(org.springframework.test.web.client.match.MockRestRequestMatchers.header(
+                        "Authorization", "Bearer resolved-caller-token"))
+                .andRespond(withSuccess("{\"authorized\":true}", MediaType.APPLICATION_JSON));
+        assertThat(client.authorize(message).authorized()).isTrue();
+        server.verify();
+    }
+
+    @Test
     void postsPaymentAuthorizationRequest() {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();

@@ -39,3 +39,12 @@ payment-processor:
   authorization-bulkhead-max-wait-duration: 0s
   kafka:
     enabled: false
+
+security:
+  jwt:
+    public-key: classpath:test-public.pem
+
+# Tests use test signing keys and must never publish to the runtime broker.
+outbox:
+  publisher:
+    enabled: false

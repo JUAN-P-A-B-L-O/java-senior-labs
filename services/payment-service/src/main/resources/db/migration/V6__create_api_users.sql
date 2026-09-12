@@ -1,0 +1,5 @@
+CREATE TABLE api_users (
+    username VARCHAR(100) PRIMARY KEY,
+    password_hash VARCHAR(100) NOT NULL,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('ADMIN', 'COMUM'))
+);

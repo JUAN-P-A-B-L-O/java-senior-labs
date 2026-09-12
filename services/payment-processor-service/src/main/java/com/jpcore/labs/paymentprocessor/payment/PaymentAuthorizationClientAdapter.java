@@ -29,6 +29,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
     private static final Logger log = LoggerFactory.getLogger(PaymentAuthorizationClientAdapter.class);
 
     private final RestClient restClient;
+    private com.jpcore.labs.paymentprocessor.security.CallerTokenProvider callerTokens;
     private final String authorizationUrl;
     private final Retry authorizationRetry;
     private final CircuitBreaker authorizationCircuitBreaker;
@@ -49,7 +50,8 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
             @Value("${payment-processor.authorization-rate-limit-refresh-period}") Duration rateLimitRefreshPeriod,
             @Value("${payment-processor.authorization-rate-limit-timeout}") Duration rateLimitTimeout,
             @Value("${payment-processor.authorization-bulkhead-max-concurrent-calls}") int bulkheadMaxConcurrentCalls,
-            @Value("${payment-processor.authorization-bulkhead-max-wait-duration}") Duration bulkheadMaxWaitDuration
+            @Value("${payment-processor.authorization-bulkhead-max-wait-duration}") Duration bulkheadMaxWaitDuration,
+            com.jpcore.labs.paymentprocessor.security.CallerTokenProvider callerTokens
     ) {
         this(
                 restClientBuilder
@@ -65,6 +67,7 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
                 rateLimiter(rateLimitForPeriod, rateLimitRefreshPeriod, rateLimitTimeout),
                 bulkhead(bulkheadMaxConcurrentCalls, bulkheadMaxWaitDuration)
         );
+        this.callerTokens = callerTokens;
     }
 
     PaymentAuthorizationClientAdapter(RestClient restClient, String authorizationUrl, Retry authorizationRetry) {
@@ -181,6 +184,9 @@ class PaymentAuthorizationClientAdapter implements PaymentAuthorizationClient {
     private AuthorizationResponse requestAuthorization(PaymentRequestedMessage message) {
         return restClient.post()
                 .uri(authorizationUrl)
+                .headers(headers -> {
+                    if (callerTokens != null) headers.setBearerAuth(callerTokens.tokenFor(message));
+                })
                 .body(AuthorizationRequest.from(message))
                 .retrieve()
                 .body(AuthorizationResponse.class);

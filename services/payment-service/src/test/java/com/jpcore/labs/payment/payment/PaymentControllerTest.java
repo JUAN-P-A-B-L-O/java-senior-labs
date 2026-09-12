@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@org.springframework.security.test.context.support.WithMockUser(roles = "COMUM")
 @SpringBootTest
 @AutoConfigureMockMvc
 class PaymentControllerTest {

@@ -44,4 +44,25 @@ class PaymentRequestedPublisherTest {
         assertThat(message.description()).isEqualTo("test payment");
         assertThat(message.traceParent()).isEqualTo(traceParent);
     }
+    @Test
+    void preservesCallerTokenInOutboxAndRedactsItFromToString() {
+        var outbox = mock(OutboxEventService.class);
+        var publisher = new PaymentRequestedPublisher(outbox, mock(TraceContextProvider.class));
+        var jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("private-user-token")
+                .header("alg", "RS256").subject("comum").build();
+        var context = org.springframework.security.core.context.SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt));
+        org.springframework.security.core.context.SecurityContextHolder.setContext(context);
+        try {
+            var payment = new PaymentEntity(BigDecimal.ONE, "BRL", "identity", PaymentStatus.PROCESSING);
+            ReflectionTestUtils.setField(payment, "id", UUID.randomUUID());
+            publisher.publish(payment);
+            var captor = ArgumentCaptor.forClass(PaymentRequestedMessage.class);
+            verify(outbox).savePaymentRequested(captor.capture());
+            assertThat(captor.getValue().callerToken()).isEqualTo("private-user-token");
+            assertThat(captor.getValue().toString()).doesNotContain("private-user-token");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
 }

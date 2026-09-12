@@ -31,3 +31,15 @@ spring:
 logging:
   file:
     path: ${LOG_DIR:${java.io.tmpdir}/java-senior-labs-test-logs/payment-service}
+
+security:
+  jwt:
+    public-key: classpath:test-public.pem
+
+JWT_PRIVATE_KEY: classpath:test-private.pem
+AUTH_PROCESSOR_PASSWORD: test-processor-secret
+
+# Tests use test signing keys and must never publish to the runtime broker.
+outbox:
+  publisher:
+    enabled: false

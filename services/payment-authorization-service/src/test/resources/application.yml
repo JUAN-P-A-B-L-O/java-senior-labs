@@ -1,0 +1,4 @@
+
+security:
+  jwt:
+    public-key: classpath:test-public.pem

@@ -158,3 +158,67 @@ docker exec payment-lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
 The local broker advertises `localhost:9092` for host-based services. If services
 run inside containers, configure Kafka advertised listeners and bootstrap servers
 with addresses reachable from those containers.
+
+## JWT authentication
+
+Run `./scripts/setup-local-auth.sh` once, then `source .local-auth/auth.env` in each
+terminal before starting the services. The script creates an RSA signing key and
+random local credentials under the ignored `.local-auth/` directory, and preserves
+existing credentials on subsequent runs. Give only `JWT_PUBLIC_KEY` to the
+payment authorization service; the processor also needs `AUTH_PROCESSOR_PASSWORD`.
+Only payment-service needs `JWT_PRIVATE_KEY` and `AUTH_ADMIN_PASSWORD`.
+Without explicit key locations, services find `.local-auth` in the working directory
+or its parents, so launching from the repository root or a service module works.
+For launches outside the repository, set absolute `file:` locations using the
+generated environment file. Explicit locations always take precedence.
+
+On payment-service startup, Flyway creates `api_users` and the configured bootstrap
+password creates `admin` with role `ADMIN` if absent. Passwords are BCrypt hashes;
+restarting never resets an existing admin password. No default password is built in.
+
+Obtain the admin token from `POST http://localhost:8080/api/auth/login` with JSON
+`{"username":"admin","password":"<AUTH_ADMIN_PASSWORD from .local-auth/auth.env>"}`.
+Login and service-token requests authenticate using their JSON credentials and ignore
+any inherited Bearer header. Send `Content-Type: application/json` with
+both `username` and `password`. Missing fields or malformed JSON return 400;
+incorrect credentials return 401 with `detail: "Invalid credentials"`.
+The response contains `accessToken`, `tokenType` and `expiresIn` (3600 seconds).
+Send `Authorization: Bearer <accessToken>` on payment requests, keeping the existing
+`Idempotency-Key` header and request body.
+
+An ADMIN can create another ADMIN or COMUM user with
+`POST /api/auth/users`, bearer authentication and JSON:
+
+```json
+{"username":"comum","password":"<choose a password of at least 12 characters>","role":"COMUM"}
+```
+
+Both roles can create and read payments. Only ADMIN can create users. Missing,
+invalid or expired credentials return 401; insufficient roles return 403.
+Health and Prometheus endpoints remain available without authentication.
+
+PaymentRequested carries the original signed JWT through the existing transactional
+outbox and RabbitMQ. The processor validates and forwards it to
+`POST /api/authorizations`, whose Spring Security principal retains the original
+username and roles. Without a user context (including legacy queued messages),
+the processor obtains a short-lived SERVICE token using
+`POST /api/auth/service-token` with its configured client ID
+`payment-processor-service` and `AUTH_PROCESSOR_PASSWORD` as `clientSecret`.
+`AUTH_TOKEN_URL` defaults to `http://localhost:8080/api/auth/service-token`.
+Service tokens last 300 seconds and are cached with a 30-second refresh margin.
+SERVICE can call payment authorization but cannot create payments or users.
+
+JWT verification uses RS256 signatures, expiry, issuer `payment-service` and
+audience `payment-lab`, following [Spring Security resource-server support](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html).
+Bearer credentials in queued messages/outbox rows are sensitive: restrict broker
+and database access and use TLS outside the local lab. User tokens are never
+silently replaced by service tokens when invalid or expired; messages delayed past
+the one-hour lifetime follow the existing retry/DLQ path. The JWT is excluded from
+message `toString()` and is not added to completion events or application logs.
+Test-only RSA keys in `src/test/resources` must never be configured for runtime use.
+
+Automated tests disable RabbitMQ outbox publishers with
+`outbox.publisher.enabled=false` (and the processor tests disable Kafka publishing).
+This keeps test-signed JWTs out of the running lab's queues. Runtime RabbitMQ
+publishing remains enabled by default. Tokens signed with test keys are intentionally
+rejected by runtime services; never configure a runtime service to trust test keys.
