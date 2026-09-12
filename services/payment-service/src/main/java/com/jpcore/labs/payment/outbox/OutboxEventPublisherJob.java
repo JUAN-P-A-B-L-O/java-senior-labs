@@ -36,6 +36,7 @@ public class OutboxEventPublisherJob {
         try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
             try {
                 PaymentRequestedMessage message = outboxEventService.toPaymentRequestedMessage(outboxEvent);
+                ignored.requestedBy(message.requestedBy());
                 try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(message.traceId(), outboxEvent.getAggregateId())) {
                     CorrelationData correlationData = new CorrelationData(outboxEvent.getEventId().toString());
 

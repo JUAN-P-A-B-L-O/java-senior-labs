@@ -33,7 +33,11 @@ class OutboxEventServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         ArgumentCaptor<OutboxEventEntity> captor = ArgumentCaptor.forClass(OutboxEventEntity.class);
 
-        OutboxEventEntity result = service.savePaymentProcessed(REQUESTED_EVENT_ID, TRACE_ID, PAYMENT_ID);
+        OutboxEventEntity result;
+        try (var ignored = com.jpcore.labs.paymentprocessor.payment.PaymentLogContext.with(TRACE_ID, PAYMENT_ID, "alice")) {
+            result = service.savePaymentProcessed(REQUESTED_EVENT_ID, TRACE_ID, PAYMENT_ID);
+        }
+        assertThat(((PaymentProcessedMessage) service.toMessage(result)).requestedBy()).isEqualTo("alice");
 
         verify(repository, times(2)).saveAndFlush(captor.capture());
         assertThat(result).isSameAs(captor.getAllValues().getFirst());
@@ -42,6 +46,7 @@ class OutboxEventServiceTest {
         assertThat(kafkaEvent.getEventId()).isNotEqualTo(result.getEventId());
         assertThat(kafkaEvent.getStatus()).isEqualTo(OutboxEventStatus.WAITING_PUBLISH);
         PaymentProcessedMessage kafkaMessage = (PaymentProcessedMessage) service.toMessage(kafkaEvent);
+        assertThat(kafkaMessage.requestedBy()).isEqualTo("alice");
         assertThat(kafkaMessage.eventId()).isEqualTo(kafkaEvent.getEventId());
         assertThat(kafkaMessage.paymentId()).isEqualTo(PAYMENT_ID);
         assertThat(kafkaMessage.requestedEventId()).isEqualTo(REQUESTED_EVENT_ID);
@@ -66,7 +71,11 @@ class OutboxEventServiceTest {
         when(repository.saveAndFlush(any(OutboxEventEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        OutboxEventEntity result = service.savePaymentProcessingFailed(REQUESTED_EVENT_ID, TRACE_ID, PAYMENT_ID, "denied");
+        OutboxEventEntity result;
+        try (var ignored = com.jpcore.labs.paymentprocessor.payment.PaymentLogContext.with(TRACE_ID, PAYMENT_ID, "alice")) {
+            result = service.savePaymentProcessingFailed(REQUESTED_EVENT_ID, TRACE_ID, PAYMENT_ID, "denied");
+        }
+        assertThat(((PaymentProcessingFailedMessage) service.toMessage(result)).requestedBy()).isEqualTo("alice");
 
         assertThat(result.getEventId()).isNotNull();
         assertThat(result.getAggregateId()).isEqualTo(UUID.fromString(PAYMENT_ID));

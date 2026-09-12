@@ -39,6 +39,7 @@ public class OutboxEventPublisherJob {
         try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
             try {
                 Object message = outboxEventService.toMessage(outboxEvent);
+                ignored.requestedBy(requestedBy(message));
                 try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(traceId(message), outboxEvent.getAggregateId())) {
                     rabbitTemplate.convertAndSend(
                             RabbitMqConfig.PAYMENT_EXCHANGE,
@@ -78,6 +79,12 @@ public class OutboxEventPublisherJob {
             return RabbitMqConfig.PAYMENT_PROCESSING_FAILED_ROUTING_KEY;
         }
         throw new IllegalStateException("Unknown outbox event type: " + outboxEvent.getEventType());
+    }
+
+    private String requestedBy(Object message) {
+        if (message instanceof PaymentProcessedMessage processed) return processed.requestedBy();
+        if (message instanceof PaymentProcessingFailedMessage failed) return failed.requestedBy();
+        return null;
     }
 
     private UUID traceId(Object message) {

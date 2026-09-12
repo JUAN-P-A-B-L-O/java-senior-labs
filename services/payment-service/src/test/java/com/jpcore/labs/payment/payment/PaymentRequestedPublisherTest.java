@@ -32,10 +32,13 @@ class PaymentRequestedPublisherTest {
         String traceParent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
         org.mockito.Mockito.when(traceContextProvider.currentTraceParent()).thenReturn(traceParent);
 
-        publisher.publish(payment, traceId);
+        try (var ignored = PaymentLogContext.with(traceId, paymentId, "alice")) {
+            publisher.publish(payment, traceId);
+        }
 
         verify(outboxEventService).savePaymentRequested(messageCaptor.capture());
         PaymentRequestedMessage message = messageCaptor.getValue();
+        assertThat(message.requestedBy()).isEqualTo("alice");
         assertThat(message.eventId()).isNotNull();
         assertThat(message.traceId()).isEqualTo(traceId);
         assertThat(message.paymentId()).isEqualTo(paymentId.toString());

@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 class AuthIntegrationTest {
+    @Autowired com.jpcore.labs.payment.outbox.OutboxEventRepository outbox;
     @Autowired MockMvc mvc;
     @Autowired AuthService auth;
     @Autowired ApiUserRepository users;
@@ -46,11 +47,16 @@ class AuthIntegrationTest {
             String token = login(name);
             assertThat(decoder.decode(token).getSubject()).isEqualTo(name);
             assertThat(users.findById(name).orElseThrow().getPasswordHash()).startsWith("$2");
-            mvc.perform(post("/api/payments").header("Authorization", "Bearer " + token)
+            var paymentResult = mvc.perform(post("/api/payments").header("Authorization", "Bearer " + token)
                     .header("Idempotency-Key", UUID.randomUUID().toString())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{\"amount\":10,\"currency\":\"BRL\",\"description\":\"JWT test\"}"))
-                    .andExpect(status().isCreated());
+                    .andExpect(status().isCreated()).andReturn();
+            String paymentId = json.readTree(paymentResult.getResponse().getContentAsString()).get("id").asText();
+            var event = outbox.findAll().stream()
+                    .filter(row -> row.getAggregateId().toString().equals(paymentId)).findFirst().orElseThrow();
+            assertThat(json.readTree(event.getPayload()).get("requestedBy").asText()).isEqualTo(name);
+            assertThat(org.slf4j.MDC.get("requestedBy")).isNull();
             if (role == UserRole.COMUM) {
                 mvc.perform(post("/api/auth/users").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))

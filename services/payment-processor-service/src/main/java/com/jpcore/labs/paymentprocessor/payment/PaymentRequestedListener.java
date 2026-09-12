@@ -28,7 +28,7 @@ public class PaymentRequestedListener {
 
     @RabbitListener(queues = RabbitMqConfig.PAYMENT_PROCESS_QUEUE)
     public void listen(PaymentRequestedMessage message) {
-        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId(), message.requestedBy())) {
             if (processedEventService.isProcessed(message.eventId())) {
                 log.info("PaymentRequested duplicate ignored. eventId={}", message.eventId());
                 return;

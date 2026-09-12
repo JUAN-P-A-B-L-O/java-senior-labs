@@ -78,6 +78,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/users").hasRole("ADMIN")
                         .requestMatchers("/api/payments", "/api/payments/**").hasAnyRole("ADMIN", "COMUM")
                         .anyRequest().denyAll())
+                .addFilterAfter(new RequestLogContextFilter(),
+                        org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(authentication)))
                 .build();
     }

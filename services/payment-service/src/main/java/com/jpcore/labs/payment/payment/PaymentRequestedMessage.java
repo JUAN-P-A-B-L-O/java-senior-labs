@@ -11,8 +11,13 @@ public record PaymentRequestedMessage(
         String currency,
         String description,
         String traceParent,
-        String callerToken
+        String callerToken,
+        String requestedBy
 ) {
+    public PaymentRequestedMessage(UUID eventId, UUID traceId, String paymentId, BigDecimal amount, String currency, String description, String traceParent, String callerToken) {
+        this(eventId, traceId, paymentId, amount, currency, description, traceParent, callerToken, null);
+    }
+
     public PaymentRequestedMessage(UUID eventId, UUID traceId, String paymentId, BigDecimal amount,
             String currency, String description, String traceParent) {
         this(eventId, traceId, paymentId, amount, currency, description, traceParent, null);

@@ -64,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/prometheus").permitAll()
                         
                         .anyRequest().denyAll())
+                .addFilterAfter(new RequestLogContextFilter(),
+                        org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(authentication)))
                 .build();
     }

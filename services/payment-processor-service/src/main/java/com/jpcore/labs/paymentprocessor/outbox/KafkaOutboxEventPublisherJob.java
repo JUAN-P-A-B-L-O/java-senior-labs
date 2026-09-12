@@ -53,6 +53,7 @@ public class KafkaOutboxEventPublisherJob {
         try (PaymentLogContext ignored = PaymentLogContext.with(null, event.getAggregateId())) {
             try {
                 PaymentProcessedMessage message = (PaymentProcessedMessage) outboxEventService.toMessage(event);
+                ignored.requestedBy(message.requestedBy());
                 try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(message.traceId(), event.getAggregateId())) {
                     ProducerRecord<String, String> record = new ProducerRecord<>(
                             topic, event.getAggregateId().toString(), event.getPayload());

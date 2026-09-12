@@ -41,7 +41,8 @@ public class PaymentRequestedPublisher {
                 payment.getCurrency(),
                 payment.getDescription(),
                 traceContextProvider.currentTraceParent(),
-                callerToken()
+                callerToken(),
+                org.slf4j.MDC.get("requestedBy")
         );
         outboxEventService.savePaymentRequested(message);
         log.info("PaymentRequested saved to outbox. eventId={}", eventId);
