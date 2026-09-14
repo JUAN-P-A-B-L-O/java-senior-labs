@@ -10,6 +10,56 @@ Minimal Java 21 + Spring Boot 3 Payment API for backend interview practice.
 
 ## Run
 
+Start all three microservices, PostgreSQL, RabbitMQ, Kafka, Redis, and observability
+with Docker Compose v2 (Java and Maven are supplied by the Dockerfile builds):
+
+```bash
+docker compose up -d --build --wait
+```
+
+If the Compose plugin is unavailable, install Docker Compose v2 first. Services
+already started manually must be stopped and their conflicting containers removed
+before switching to Compose; keep their data volumes. Compose cannot adopt the
+existing named containers. This command does not migrate host-run service data or
+the host's `.local-auth` credentials.
+
+| Service | Local address |
+| --- | --- |
+| Payment API | http://localhost:8080 |
+| Processor | http://localhost:8083 |
+| Authorization | http://localhost:8085 |
+| RabbitMQ management | http://localhost:15672 |
+| Grafana | http://localhost:3000 |
+| Kafka (host clients) | localhost:9092 |
+
+Override API host ports with `PAYMENT_PORT`, `PROCESSOR_PORT`, and
+`AUTHORIZATION_PORT`. Inside the Docker networks, services use DNS names and ports
+8080, 8082, and 8084; Kafka clients use `kafka:29092`. PostgreSQL is exposed on 5433
+and Redis on 6379. PostgreSQL uses the local lab credentials `payment_lab` /
+`payment_lab`; RabbitMQ uses `guest` / `guest`, and Grafana uses `admin` / `admin`.
+
+Bootstrap jobs generate persistent RSA keys and random authentication credentials,
+and create `payment_processor_db` if absent. Services wait for those jobs and their
+required dependencies to become ready using [Compose startup conditions](https://docs.docker.com/compose/how-tos/startup-order/). Only payment-service mounts the private key;
+all three services mount the public key read-only. For the Compose-created admin
+account, retrieve its password locally with:
+
+```bash
+docker compose exec payment-service cat /keys/private/admin-password
+```
+
+Use that password with the login endpoint described below. The bootstrap preserves
+keys and passwords across restarts; an existing database admin password is never
+reset. Compose uses its own key volumes, separate from `.local-auth`, so host-issued
+tokens do not authenticate against this environment.
+
+Named volumes persist databases, broker data, Redis AOF, JWT keys, application logs,
+and observability data. Prometheus scrapes service DNS addresses and Alloy reads the
+shared application log volumes. `docker compose down` retains these volumes;
+`docker compose down -v` deletes the environment's data and credentials.
+
+### Run services directly on the host
+
 ```bash
 docker compose up -d postgres
 mvn -pl services/payment-service spring-boot:run
