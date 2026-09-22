@@ -45,12 +45,16 @@ class PaymentRequestedListenerTest {
                 BigDecimal.TEN,
                 "BRL",
                 "test payment",
-                TRACE_PARENT
+                TRACE_PARENT, null, "alice"
         );
         when(processedEventService.isProcessed(EVENT_ID)).thenReturn(false);
-        when(paymentAuthorizationService.authorize(message)).thenReturn(true);
+        when(paymentAuthorizationService.authorize(message)).thenAnswer(invocation -> {
+            org.assertj.core.api.Assertions.assertThat(org.slf4j.MDC.get("requestedBy")).isEqualTo("alice");
+            return true;
+        });
 
         listener.listen(message);
+        org.assertj.core.api.Assertions.assertThat(org.slf4j.MDC.get("requestedBy")).isNull();
 
         verify(paymentAuthorizationService).authorize(message);
         verify(outboxEventService).savePaymentProcessed(EVENT_ID, TRACE_ID, PAYMENT_ID, TRACE_PARENT);

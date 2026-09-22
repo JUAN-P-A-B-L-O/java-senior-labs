@@ -9,9 +9,11 @@ import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.core.Message;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
+@ConditionalOnProperty(prefix = "outbox.publisher", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxEventPublisherJob {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxEventPublisherJob.class);
@@ -34,6 +36,7 @@ public class OutboxEventPublisherJob {
         try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
             try {
                 PaymentRequestedMessage message = outboxEventService.toPaymentRequestedMessage(outboxEvent);
+                ignored.requestedBy(message.requestedBy());
                 try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(message.traceId(), outboxEvent.getAggregateId())) {
                     CorrelationData correlationData = new CorrelationData(outboxEvent.getEventId().toString());
 

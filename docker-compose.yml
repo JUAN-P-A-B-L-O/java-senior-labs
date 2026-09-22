@@ -1,4 +1,5 @@
 x-payment-lab-logging: &payment-lab-logging
+  restart: unless-stopped
   logging:
     driver: json-file
     options:
@@ -6,6 +7,145 @@ x-payment-lab-logging: &payment-lab-logging
       max-file: "3"
 
 services:
+  auth-init:
+    image: eclipse-temurin:21-jre
+    user: "0"
+    restart: "no"
+    entrypoint: ["sh", "/init-auth.sh"]
+    volumes:
+      - ./docker/init-auth.sh:/init-auth.sh:ro
+      - payment_lab_jwt_private:/keys/private
+      - payment_lab_jwt_public:/keys/public
+
+  database-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGUSER: payment_lab
+      PGPASSWORD: payment_lab
+      PGDATABASE: payment_lab
+    entrypoint: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/init-databases.sql"]
+    volumes:
+      - ./docker/init-databases.sql:/init-databases.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment-service:
+    <<: *payment-lab-logging
+    build:
+      context: ./services/payment-service
+      dockerfile: docker/Dockerfile
+    container_name: payment-lab-payment-service
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://postgres:5432/payment_lab
+      DB_USERNAME: payment_lab
+      DB_PASSWORD: payment_lab
+      REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+      JWT_PUBLIC_KEY: file:/keys/public/public.pem
+      JWT_PRIVATE_KEY: file:/keys/private/private.pem
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+    entrypoint: ["sh", "-ec"]
+    command:
+      - |
+        export AUTH_ADMIN_PASSWORD="$$(cat /keys/private/admin-password)"
+        export AUTH_PROCESSOR_PASSWORD="$$(cat /keys/private/processor-password)"
+        exec java -jar /app/payment-service.jar
+    ports:
+      - "127.0.0.1:${PAYMENT_PORT:-8080}:8080"
+    networks: [default, observability]
+    volumes:
+      - payment_lab_jwt_public:/keys/public:ro
+      - payment_lab_jwt_private:/keys/private:ro
+      - payment_lab_payment_logs:/app/logs
+    depends_on:
+      auth-init:
+        condition: service_completed_successfully
+      database-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      tempo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+
+  payment-authorization-service:
+    <<: *payment-lab-logging
+    build:
+      context: ./services/payment-authorization-service
+      dockerfile: docker/Dockerfile
+    container_name: payment-lab-authorization-service
+    environment:
+      SERVER_PORT: 8084
+      JWT_PUBLIC_KEY: file:/keys/public/public.pem
+      AUTHORIZATION_LONG_DELAY_PROBABILITY_PERCENT: ${AUTHORIZATION_LONG_DELAY_PROBABILITY_PERCENT:-0}
+    ports:
+      - "127.0.0.1:${AUTHORIZATION_PORT:-8085}:8084"
+    volumes:
+      - payment_lab_jwt_public:/keys/public:ro
+      - payment_lab_authorization_logs:/app/logs
+    depends_on:
+      auth-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  payment-processor-service:
+    <<: *payment-lab-logging
+    build:
+      context: ./services/payment-processor-service
+      dockerfile: docker/Dockerfile
+    container_name: payment-lab-processor-service
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:postgresql://postgres:5432/payment_processor_db
+      DB_USERNAME: payment_lab
+      DB_PASSWORD: payment_lab
+      SPRING_RABBITMQ_HOST: rabbitmq
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      AUTHORIZATION_URL: http://payment-authorization-service:8084/api/authorizations
+      JWT_PUBLIC_KEY: file:/keys/public/public.pem
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+    ports:
+      - "127.0.0.1:${PROCESSOR_PORT:-8083}:8082"
+    networks: [default, observability]
+    volumes:
+      - payment_lab_jwt_public:/keys/public:ro
+      - payment_lab_processor_logs:/app/logs
+    depends_on:
+      auth-init:
+        condition: service_completed_successfully
+      database-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      payment-authorization-service:
+        condition: service_healthy
+      tempo:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+
   postgres:
     <<: *payment-lab-logging
     image: postgres:16-alpine
@@ -28,6 +168,9 @@ services:
     <<: *payment-lab-logging
     image: rabbitmq:3.13-management-alpine
     container_name: payment-lab-rabbitmq
+    hostname: payment-lab-rabbitmq
+    volumes:
+      - payment_lab_rabbitmq_data:/var/lib/rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -37,19 +180,31 @@ services:
       timeout: 5s
       retries: 5
 
+  kafka-storage-init:
+    image: apache/kafka:4.0.0
+    user: "0"
+    restart: "no"
+    entrypoint: ["chown", "-R", "1000:1000", "/tmp/kraft-combined-logs"]
+    volumes:
+      - payment_lab_kafka_data:/tmp/kraft-combined-logs
+
   kafka:
     <<: *payment-lab-logging
     image: apache/kafka:4.0.0
     container_name: payment-lab-kafka
+    depends_on:
+      kafka-storage-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://:9092,INTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:29092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
@@ -67,6 +222,9 @@ services:
     <<: *payment-lab-logging
     image: redis:7.4-alpine
     container_name: payment-lab-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - payment_lab_redis_data:/data
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -126,8 +284,6 @@ services:
     volumes:
       - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - payment_lab_prometheus_data:/prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   tempo:
     <<: *payment-lab-logging
@@ -158,7 +314,9 @@ services:
       - "127.0.0.1:12345:12345"
     volumes:
       - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - ./logs:/var/log/payment-lab:ro
+      - payment_lab_payment_logs:/var/log/payment-lab/payment-service:ro
+      - payment_lab_processor_logs:/var/log/payment-lab/payment-processor-service:ro
+      - payment_lab_authorization_logs:/var/log/payment-lab/payment-authorization-service:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
@@ -166,6 +324,13 @@ services:
         condition: service_healthy
 
 volumes:
+  payment_lab_jwt_private:
+  payment_lab_jwt_public:
+  payment_lab_payment_logs:
+  payment_lab_processor_logs:
+  payment_lab_authorization_logs:
+  payment_lab_rabbitmq_data:
+  payment_lab_redis_data:
   payment_lab_kafka_data:
   payment_lab_postgres_data:
   payment_lab_loki_data:
@@ -174,5 +339,7 @@ volumes:
   payment_lab_tempo_data:
 
 networks:
+  default:
+    driver: bridge
   observability:
     name: payment-lab-observability

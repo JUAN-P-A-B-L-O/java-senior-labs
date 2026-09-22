@@ -82,3 +82,7 @@ payment-processor:
     enabled: ${KAFKA_PUBLISHER_ENABLED:true}
     payment-processed-topic: ${KAFKA_PAYMENT_PROCESSED_TOPIC:payment.processed}
     publish-timeout: ${KAFKA_PUBLISH_TIMEOUT:15s}
+
+security:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY:}

@@ -23,7 +23,7 @@ public class PaymentResultListener {
 
     @RabbitHandler
     public void listen(PaymentProcessedMessage message) {
-        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId(), message.requestedBy())) {
             if (processedEventService.isProcessed(message.eventId())) {
                 log.info("PaymentProcessed duplicate ignored. eventId={}", message.eventId());
                 return;
@@ -45,7 +45,7 @@ public class PaymentResultListener {
 
     @RabbitHandler
     public void listen(PaymentProcessingFailedMessage message) {
-        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
+        try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId(), message.requestedBy())) {
             if (processedEventService.isProcessed(message.eventId())) {
                 log.info("PaymentProcessingFailed duplicate ignored. eventId={}", message.eventId());
                 return;

@@ -61,12 +61,13 @@ public class OutboxEventService {
                     traceId,
                     requestedEventId,
                     paymentId,
-                    currentOrFallbackTraceParent(fallbackTraceParent)
+                    currentOrFallbackTraceParent(fallbackTraceParent),
+                    org.slf4j.MDC.get("requestedBy")
             );
             OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED, message);
             PaymentProcessedMessage kafkaMessage = new PaymentProcessedMessage(
                     UUID.randomUUID(), message.traceId(), message.requestedEventId(),
-                    message.paymentId(), message.traceParent()
+                    message.paymentId(), message.traceParent(), message.requestedBy()
             );
             save(kafkaMessage.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSED_KAFKA, kafkaMessage);
             log.info("Result event saved to outbox. eventId={} eventType={} requestedEventId={}",
@@ -103,7 +104,8 @@ public class OutboxEventService {
                     requestedEventId,
                     paymentId,
                     reason,
-                    currentOrFallbackTraceParent(fallbackTraceParent)
+                    currentOrFallbackTraceParent(fallbackTraceParent),
+                    org.slf4j.MDC.get("requestedBy")
             );
             OutboxEventEntity outboxEvent = save(message.eventId(), UUID.fromString(paymentId), PAYMENT_PROCESSING_FAILED, message);
             log.info("Result event saved to outbox. eventId={} eventType={} requestedEventId={}",

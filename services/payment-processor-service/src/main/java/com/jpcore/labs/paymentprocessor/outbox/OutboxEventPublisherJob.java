@@ -10,11 +10,13 @@ import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
 @Service
+@ConditionalOnProperty(prefix = "outbox.publisher", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxEventPublisherJob {
 
     private static final Logger log = LoggerFactory.getLogger(OutboxEventPublisherJob.class);
@@ -37,6 +39,7 @@ public class OutboxEventPublisherJob {
         try (PaymentLogContext ignored = PaymentLogContext.with(null, outboxEvent.getAggregateId())) {
             try {
                 Object message = outboxEventService.toMessage(outboxEvent);
+                ignored.requestedBy(requestedBy(message));
                 try (PaymentLogContext ignoredWithTrace = PaymentLogContext.with(traceId(message), outboxEvent.getAggregateId())) {
                     rabbitTemplate.convertAndSend(
                             RabbitMqConfig.PAYMENT_EXCHANGE,
@@ -76,6 +79,12 @@ public class OutboxEventPublisherJob {
             return RabbitMqConfig.PAYMENT_PROCESSING_FAILED_ROUTING_KEY;
         }
         throw new IllegalStateException("Unknown outbox event type: " + outboxEvent.getEventType());
+    }
+
+    private String requestedBy(Object message) {
+        if (message instanceof PaymentProcessedMessage processed) return processed.requestedBy();
+        if (message instanceof PaymentProcessingFailedMessage failed) return failed.requestedBy();
+        return null;
     }
 
     private UUID traceId(Object message) {

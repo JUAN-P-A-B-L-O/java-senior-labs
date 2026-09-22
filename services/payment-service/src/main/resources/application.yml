@@ -56,3 +56,7 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+security:
+  jwt:
+    public-key: ${JWT_PUBLIC_KEY:}

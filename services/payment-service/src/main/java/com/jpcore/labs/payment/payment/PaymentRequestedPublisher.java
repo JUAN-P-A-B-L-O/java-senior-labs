@@ -20,6 +20,12 @@ public class PaymentRequestedPublisher {
         this.traceContextProvider = traceContextProvider;
     }
 
+    private String callerToken() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return authentication instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken jwt
+                ? jwt.getToken().getTokenValue() : null;
+    }
+
     public void publish(PaymentEntity payment) {
         publish(payment, UUID.randomUUID());
     }
@@ -34,7 +40,9 @@ public class PaymentRequestedPublisher {
                 payment.getAmount(),
                 payment.getCurrency(),
                 payment.getDescription(),
-                traceContextProvider.currentTraceParent()
+                traceContextProvider.currentTraceParent(),
+                callerToken(),
+                org.slf4j.MDC.get("requestedBy")
         );
         outboxEventService.savePaymentRequested(message);
         log.info("PaymentRequested saved to outbox. eventId={}", eventId);
