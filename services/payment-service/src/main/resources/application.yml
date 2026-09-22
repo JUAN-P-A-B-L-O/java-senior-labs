@@ -1,4 +1,9 @@
 spring:
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY:}
+    model:
+      chat: ${SPRING_AI_MODEL_CHAT:none}
   application:
     name: payment-lab
   rabbitmq:
