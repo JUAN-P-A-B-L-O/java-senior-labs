@@ -13,5 +13,6 @@
     <modules>
         <module>services/payment-service</module>
         <module>services/payment-processor-service</module>
+        <module>services/payment-authorization-service</module>
     </modules>
 </project>

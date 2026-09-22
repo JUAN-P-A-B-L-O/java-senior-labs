@@ -1,32 +1,69 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.BooleanSupplier;
+import org.springframework.web.client.RestClientException;
 
 @Service
 public class PaymentAuthorizationService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentAuthorizationService.class);
 
-    private final BooleanSupplier authorizationDecision;
+    private final PaymentAuthorizationClient authorizationClient;
 
-    public PaymentAuthorizationService() {
-        this(() -> ThreadLocalRandom.current().nextBoolean());
-    }
-
-    PaymentAuthorizationService(BooleanSupplier authorizationDecision) {
-        this.authorizationDecision = authorizationDecision;
+    public PaymentAuthorizationService(PaymentAuthorizationClient authorizationClient) {
+        this.authorizationClient = authorizationClient;
     }
 
     public boolean authorize(PaymentRequestedMessage message) {
         try (PaymentLogContext ignored = PaymentLogContext.with(message.traceId(), message.paymentId())) {
             log.info("Authorization started. eventId={}", message.eventId());
 
-            if (authorizationDecision.getAsBoolean()) {
+            PaymentAuthorizationClient.AuthorizationResponse response;
+
+            try {
+                response = authorizationClient.authorize(message);
+            } catch (CallNotPermittedException exception) {
+                log.warn("Authorization circuit breaker rejected request. eventId={} paymentId={}",
+                        message.eventId(), message.paymentId());
+                throw new AuthorizationTemporarilyUnavailableException(
+                        "Payment authorization temporarily unavailable: circuit breaker open for paymentId="
+                                + message.paymentId(),
+                        exception
+                );
+            } catch (RequestNotPermitted exception) {
+                log.warn("Authorization rate limiter rejected request. eventId={} paymentId={}",
+                        message.eventId(), message.paymentId());
+                throw new AuthorizationTemporarilyUnavailableException(
+                        "Payment authorization temporarily unavailable: rate limit exceeded for paymentId="
+                                + message.paymentId(),
+                        exception
+                );
+            } catch (BulkheadFullException exception) {
+                log.warn("Authorization bulkhead rejected request. eventId={} paymentId={}",
+                        message.eventId(), message.paymentId());
+                throw new AuthorizationTemporarilyUnavailableException(
+                        "Payment authorization temporarily unavailable: bulkhead full for paymentId="
+                                + message.paymentId(),
+                        exception
+                );
+            } catch (RestClientException exception) {
+                log.warn("Authorization service unavailable. eventId={} paymentId={} message={}",
+                        message.eventId(),
+                        message.paymentId(),
+                        exception.getMessage()
+                );
+                throw new PaymentAuthorizationUnavailableException(
+                        "Payment authorization unavailable for paymentId=" + message.paymentId(),
+                        exception
+                );
+            }
+
+            if (response != null && Boolean.TRUE.equals(response.authorized())) {
                 log.info("Authorization succeeded. eventId={}", message.eventId());
                 return true;
             }

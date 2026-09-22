@@ -1,9 +1,16 @@
 package com.jpcore.labs.paymentprocessor.payment;
 
-import org.junit.jupiter.api.BeforeEach;
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,27 +18,81 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PaymentAuthorizationServiceTest {
 
-    private PaymentAuthorizationService service;
-
-    @BeforeEach
-    void setUp() {
-        service = new PaymentAuthorizationService(() -> true);
-    }
-
     @Test
-    void returnsTrueWhenRandomAuthorizationApprovesPayment() {
+    void returnsTrueWhenAuthorizationClientApprovesPayment() {
+        PaymentAuthorizationService service = new PaymentAuthorizationService(
+                ignored -> new PaymentAuthorizationClient.AuthorizationResponse(true)
+        );
+
         boolean authorized = service.authorize(paymentRequestedMessage());
 
         assertThat(authorized).isTrue();
     }
 
     @Test
-    void throwsExceptionWhenRandomAuthorizationDeniesPayment() {
-        service = new PaymentAuthorizationService(() -> false);
+    void throwsExceptionWhenAuthorizationClientDeniesPayment() {
+        PaymentAuthorizationService service = new PaymentAuthorizationService(
+                ignored -> new PaymentAuthorizationClient.AuthorizationResponse(false)
+        );
 
         assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
                 .isInstanceOf(PaymentAuthorizationException.class)
                 .hasMessage("Payment authorization failed for paymentId=payment-123");
+    }
+
+    @Test
+    void throwsUnavailableExceptionWhenAuthorizationClientFails() {
+        PaymentAuthorizationService service = new PaymentAuthorizationService(
+                ignored -> {
+                    throw new ResourceAccessException("connection refused");
+                }
+        );
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(PaymentAuthorizationUnavailableException.class)
+                .hasMessage("Payment authorization unavailable for paymentId=payment-123")
+                .hasCauseInstanceOf(ResourceAccessException.class);
+    }
+
+    @Test
+    void throwsTemporarilyUnavailableExceptionWhenAuthorizationCircuitBreakerIsOpen() {
+        CircuitBreaker circuitBreaker = PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f);
+        PaymentAuthorizationService service = new PaymentAuthorizationService(
+                ignored -> {
+                    throw CallNotPermittedException.createCallNotPermittedException(circuitBreaker);
+                }
+        );
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasMessage("Payment authorization temporarily unavailable: circuit breaker open for paymentId=payment-123")
+                .hasCauseInstanceOf(CallNotPermittedException.class);
+    }
+
+    @Test
+    void throwsTemporarilyUnavailableExceptionWhenAuthorizationRateLimitIsExceeded() {
+        RateLimiter limiter = PaymentAuthorizationClientAdapter.rateLimiter(1, Duration.ofHours(1), Duration.ZERO);
+        PaymentAuthorizationService service = new PaymentAuthorizationService(ignored -> {
+            throw RequestNotPermitted.createRequestNotPermitted(limiter);
+        });
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasMessage("Payment authorization temporarily unavailable: rate limit exceeded for paymentId=payment-123")
+                .hasCauseInstanceOf(RequestNotPermitted.class);
+    }
+
+    @Test
+    void throwsTemporarilyUnavailableExceptionWhenAuthorizationBulkheadIsFull() {
+        Bulkhead bulkhead = PaymentAuthorizationClientAdapter.bulkhead(1, Duration.ZERO);
+        PaymentAuthorizationService service = new PaymentAuthorizationService(ignored -> {
+            throw BulkheadFullException.createBulkheadFullException(bulkhead);
+        });
+
+        assertThatThrownBy(() -> service.authorize(paymentRequestedMessage()))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasMessage("Payment authorization temporarily unavailable: bulkhead full for paymentId=payment-123")
+                .hasCauseInstanceOf(BulkheadFullException.class);
     }
 
     private PaymentRequestedMessage paymentRequestedMessage() {

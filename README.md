@@ -91,3 +91,70 @@ mvn clean test
 
 - `GET /api/health`
 - `POST /api/payments`
+
+## Kafka payment completion events
+
+After successful authorization, the processor saves a Kafka `PaymentProcessed`
+event alongside the existing RabbitMQ result event. This means processing has
+succeeded; the payment-service status update still happens through RabbitMQ.
+Failed authorizations continue to produce only the existing RabbitMQ failure event.
+
+Both outbox entries are saved in the same database transaction. They have separate
+event IDs and publication status, and share the payment ID, requested event ID,
+and trace fields. The Kafka entry uses the internal outbox type
+`PaymentProcessedKafka`; the wire header `eventType` is `PaymentProcessed`.
+No database migration is required.
+
+Start the local Kafka broker for applications running on the host:
+
+```bash
+docker compose up -d kafka
+```
+
+If Compose is unavailable, the Apache image provides a single-node default:
+
+```bash
+docker run -d --name payment-lab-kafka -p 127.0.0.1:9092:9092 apache/kafka:4.0.0
+```
+
+Create the topic before processing payments:
+
+```bash
+docker exec payment-lab-kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --create --if-not-exists \
+  --topic payment.processed --partitions 1 --replication-factor 1
+```
+
+Processor configuration:
+
+| Variable | Default |
+| --- | --- |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` |
+| `KAFKA_PAYMENT_PROCESSED_TOPIC` | `payment.processed` |
+| `KAFKA_PUBLISHER_ENABLED` | `true` |
+| `KAFKA_PUBLISH_TIMEOUT` | `15s` |
+
+Kafka publishing runs every 30 seconds, configurable with
+`outbox.kafka-publisher.fixed-delay` in milliseconds. It uses a separate scheduler
+so Kafka connection or acknowledgement waits do not block RabbitMQ publishing.
+Disabling the Kafka publisher pauses delivery; Kafka outbox entries still accumulate
+and are delivered when it is enabled again. Existing events are not backfilled.
+
+The Kafka key is `paymentId`. The JSON value contains `eventId`, `traceId`,
+`requestedEventId`, `paymentId`, and `traceParent`; the W3C `traceparent` header
+is also forwarded when available. Publication is marked complete only after Kafka
+acknowledges the send. Failed or timed-out entries remain pending for the next run.
+Delivery is at least once: consumers should deduplicate by `eventId`, including
+when a send succeeds but the database status update fails.
+
+Observe events:
+
+```bash
+docker exec payment-lab-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic payment.processed --from-beginning \
+  --property print.key=true --property print.headers=true
+```
+
+The local broker advertises `localhost:9092` for host-based services. If services
+run inside containers, configure Kafka advertised listeners and bootstrap servers
+with addresses reachable from those containers.

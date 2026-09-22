@@ -2,6 +2,9 @@ package com.jpcore.labs.paymentprocessor.payment;
 
 import com.jpcore.labs.paymentprocessor.config.RabbitMqConfig;
 import com.jpcore.labs.paymentprocessor.outbox.OutboxEventService;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.ratelimiter.RateLimiter;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
@@ -15,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class PaymentRequestedListenerTest {
@@ -169,6 +173,46 @@ class PaymentRequestedListenerTest {
                 "Unexpected authorization error",
                 TRACE_PARENT
         );
+        verify(processedEventService, never()).markProcessed(EVENT_ID);
+    }
+
+    @Test
+    void propagatesOpenCircuitForMessageRetryWithoutFinalizingPayment() {
+        PaymentAuthorizationService authorizationService = new PaymentAuthorizationService(ignored -> {
+            throw CallNotPermittedException.createCallNotPermittedException(
+                    PaymentAuthorizationClientAdapter.circuitBreaker(3, 3, 50.0f));
+        });
+        ProcessedEventService processedEventService = mock(ProcessedEventService.class);
+        OutboxEventService outboxEventService = mock(OutboxEventService.class);
+        PaymentRequestedListener listener = new PaymentRequestedListener(
+                authorizationService, processedEventService, outboxEventService);
+        PaymentRequestedMessage message = new PaymentRequestedMessage(
+                EVENT_ID, TRACE_ID, PAYMENT_ID, BigDecimal.TEN, "BRL", "test payment", TRACE_PARENT);
+
+        assertThatThrownBy(() -> listener.listen(message))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class);
+
+        verifyNoInteractions(outboxEventService);
+        verify(processedEventService, never()).markProcessed(EVENT_ID);
+    }
+
+    @Test
+    void propagatesRateLimitRejectionForMessageRetryWithoutFinalizingPayment() {
+        PaymentAuthorizationService authorizationService = new PaymentAuthorizationService(ignored -> {
+            throw RequestNotPermitted.createRequestNotPermitted(RateLimiter.ofDefaults("authorization"));
+        });
+        ProcessedEventService processedEventService = mock(ProcessedEventService.class);
+        OutboxEventService outboxEventService = mock(OutboxEventService.class);
+        PaymentRequestedListener listener = new PaymentRequestedListener(
+                authorizationService, processedEventService, outboxEventService);
+        PaymentRequestedMessage message = new PaymentRequestedMessage(
+                EVENT_ID, TRACE_ID, PAYMENT_ID, BigDecimal.TEN, "BRL", "test payment", TRACE_PARENT);
+
+        assertThatThrownBy(() -> listener.listen(message))
+                .isInstanceOf(AuthorizationTemporarilyUnavailableException.class)
+                .hasCauseInstanceOf(RequestNotPermitted.class);
+
+        verifyNoInteractions(outboxEventService);
         verify(processedEventService, never()).markProcessed(EVENT_ID);
     }
 

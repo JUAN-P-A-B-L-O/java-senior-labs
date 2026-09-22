@@ -20,6 +20,22 @@ spring:
         retry:
           enabled: true
           max-attempts: 3
-          initial-interval: 2s
+          initial-interval: ${PAYMENT_PROCESS_RETRY_INTERVAL:30s}
           multiplier: 1
-          max-interval: 2s
+          max-interval: ${PAYMENT_PROCESS_RETRY_INTERVAL:30s}
+
+payment-processor:
+  authorization-url: http://localhost:8084/api/authorizations
+  authorization-timeout: 2s
+  authorization-max-attempts: 3
+  authorization-backoff: 1000ms
+  authorization-circuit-breaker-sliding-window-size: 3
+  authorization-circuit-breaker-minimum-calls: 3
+  authorization-circuit-breaker-failure-rate-threshold: 50
+  authorization-rate-limit-for-period: 5
+  authorization-rate-limit-refresh-period: 1s
+  authorization-rate-limit-timeout: 0s
+  authorization-bulkhead-max-concurrent-calls: 2
+  authorization-bulkhead-max-wait-duration: 0s
+  kafka:
+    enabled: false

@@ -118,6 +118,40 @@ class PaymentControllerTest {
     }
 
     @Test
+    void getPaymentReturnsPaymentById() throws Exception {
+        String response = mockMvc.perform(post("/api/payments")
+                        .header("Idempotency-Key", "find-payment-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "amount": 125.75,
+                                  "currency": "BRL",
+                                  "description": "Find payment"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        String paymentId = com.jayway.jsonpath.JsonPath.read(response, "$.id");
+
+        mockMvc.perform(get("/api/payments/{paymentId}", paymentId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(paymentId))
+                .andExpect(jsonPath("$.amount").value(125.75))
+                .andExpect(jsonPath("$.currency").value("BRL"))
+                .andExpect(jsonPath("$.description").value("Find payment"))
+                .andExpect(jsonPath("$.status").value("PROCESSING"));
+    }
+
+    @Test
+    void getPaymentReturnsNotFoundWhenPaymentDoesNotExist() throws Exception {
+        mockMvc.perform(get("/api/payments/{paymentId}", "11111111-1111-1111-1111-111111111111"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void createPaymentWithInvalidAmountReturnsBadRequest() throws Exception {
         mockMvc.perform(post("/api/payments")
                         .header("Idempotency-Key", "invalid-amount-key")

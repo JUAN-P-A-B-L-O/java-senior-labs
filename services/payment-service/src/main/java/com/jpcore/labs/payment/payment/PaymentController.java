@@ -3,6 +3,7 @@ package com.jpcore.labs.payment.payment;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -40,5 +41,10 @@ public class PaymentController {
     @GetMapping("/payments")
     public List<PaymentResponse> getPayments() {
         return paymentService.getPayments();
+    }
+
+    @GetMapping("/payments/{paymentId}")
+    public PaymentResponse getPayment(@PathVariable String paymentId) {
+        return paymentService.getPayment(paymentId);
     }
 }

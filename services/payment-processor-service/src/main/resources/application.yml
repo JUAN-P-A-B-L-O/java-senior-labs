@@ -14,6 +14,17 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
   rabbitmq:
     publisher-confirm-type: correlated
     publisher-returns: true
@@ -29,9 +40,9 @@ spring:
         retry:
           enabled: true
           max-attempts: 3
-          initial-interval: 2s
+          initial-interval: ${PAYMENT_PROCESS_RETRY_INTERVAL:30s}
           multiplier: 1
-          max-interval: 2s
+          max-interval: ${PAYMENT_PROCESS_RETRY_INTERVAL:30s}
 
 logging:
   file:
@@ -51,3 +62,23 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+payment-processor:
+  authorization-url: ${AUTHORIZATION_URL:http://localhost:8084/api/authorizations}
+  authorization-timeout: ${AUTHORIZATION_TIMEOUT:2s}
+  authorization-max-attempts: ${AUTHORIZATION_MAX_ATTEMPTS:3}
+  authorization-backoff: ${AUTHORIZATION_BACKOFF:1000ms}
+  authorization-circuit-breaker-sliding-window-size: ${AUTHORIZATION_CIRCUIT_BREAKER_SLIDING_WINDOW_SIZE:3}
+  authorization-circuit-breaker-minimum-calls: ${AUTHORIZATION_CIRCUIT_BREAKER_MINIMUM_CALLS:3}
+  authorization-circuit-breaker-failure-rate-threshold: ${AUTHORIZATION_CIRCUIT_BREAKER_FAILURE_RATE_THRESHOLD:50}
+  # Per processor instance; each HTTP attempt, including retries, consumes a permit.
+  authorization-rate-limit-for-period: ${AUTHORIZATION_RATE_LIMIT_FOR_PERIOD:5}
+  authorization-rate-limit-refresh-period: ${AUTHORIZATION_RATE_LIMIT_REFRESH_PERIOD:1s}
+  authorization-rate-limit-timeout: ${AUTHORIZATION_RATE_LIMIT_TIMEOUT:0s}
+  # Per processor instance; permits are released before HTTP retry backoff.
+  authorization-bulkhead-max-concurrent-calls: ${AUTHORIZATION_BULKHEAD_MAX_CONCURRENT_CALLS:2}
+  authorization-bulkhead-max-wait-duration: ${AUTHORIZATION_BULKHEAD_MAX_WAIT_DURATION:0s}
+  kafka:
+    enabled: ${KAFKA_PUBLISHER_ENABLED:true}
+    payment-processed-topic: ${KAFKA_PAYMENT_PROCESSED_TOPIC:payment.processed}
+    publish-timeout: ${KAFKA_PUBLISH_TIMEOUT:15s}

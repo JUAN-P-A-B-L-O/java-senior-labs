@@ -1,62 +1,58 @@
 discovery.docker "payment_lab" {
-  host = "unix:///var/run/docker.sock"
+	host = "unix:///var/run/docker.sock"
 }
 
 discovery.relabel "payment_lab" {
-  targets = discovery.docker.payment_lab.targets
+	targets = discovery.docker.payment_lab.targets
 
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/payment-lab-(payment|processor|rabbitmq|postgres|loki|grafana|alloy)"
-    action        = "keep"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/payment-lab-(postgres|rabbitmq|redis|grafana|prometheus|tempo|alloy)"
+		action        = "keep"
+	}
 
-  rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
 
-  rule {
-    source_labels = ["__meta_docker_container_log_stream"]
-    target_label  = "stream"
-  }
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
 }
 
 loki.source.docker "payment_lab" {
-  host       = "unix:///var/run/docker.sock"
-  targets    = discovery.relabel.payment_lab.output
-  forward_to = [loki.write.default.receiver]
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.payment_lab.output
+	forward_to = [loki.write.default.receiver]
 }
 
 local.file_match "spring_services" {
-  path_targets = [
-    {
-      __path__ = "/var/log/payment-lab/payment-service/*.log",
-      service  = "payment-service",
-    },
-    {
-      __path__ = "/var/log/payment-lab/payment-processor-service/*.log",
-      service  = "payment-processor-service",
-    },
-    {
-      __path__ = "/var/log/payment-lab/payment-service.log",
-      service  = "payment-service",
-    },
-    {
-      __path__ = "/var/log/payment-lab/payment-processor-service.log",
-      service  = "payment-processor-service",
-    },
-  ]
+	path_targets = [
+		{
+			__path__ = "/var/log/payment-lab/payment-service/*.log",
+			service  = "payment-service",
+		},
+		{
+			__path__ = "/var/log/payment-lab/payment-processor-service/*.log",
+			service  = "payment-processor-service",
+		},
+		{
+			__path__ = "/var/log/payment-lab/payment-authorization-service/*.log",
+			service  = "payment-authorization-service",
+		},
+	]
 }
 
 loki.source.file "spring_services" {
-  targets    = local.file_match.spring_services.targets
-  forward_to = [loki.write.default.receiver]
+	targets    = local.file_match.spring_services.targets
+	forward_to = [loki.write.default.receiver]
 }
 
 loki.write "default" {
-  endpoint {
-    url = "http://payment-lab-loki:3100/loki/api/v1/push"
-  }
+	endpoint {
+		url = "http://payment-lab-loki:3100/loki/api/v1/push"
+	}
 }
