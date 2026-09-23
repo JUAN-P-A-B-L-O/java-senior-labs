@@ -77,6 +77,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/health", "/actuator/health", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/auth/users").hasRole("ADMIN")
                         .requestMatchers("/api/payments", "/api/payments/**").hasAnyRole("ADMIN", "COMUM")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/ai/test").hasAnyRole("ADMIN", "COMUM")
                         .anyRequest().denyAll())
                 .addFilterAfter(new RequestLogContextFilter(),
                         org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
