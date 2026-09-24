@@ -19,9 +19,11 @@ import java.util.Map;
 public class PaymentController {
 
     private final PaymentService paymentService;
+    private final PaymentAnalysisService paymentAnalysisService;
 
-    public PaymentController(PaymentService paymentService) {
+    public PaymentController(PaymentService paymentService, PaymentAnalysisService paymentAnalysisService) {
         this.paymentService = paymentService;
+        this.paymentAnalysisService = paymentAnalysisService;
     }
 
     @GetMapping("/health")
@@ -46,5 +48,10 @@ public class PaymentController {
     @GetMapping("/payments/{paymentId}")
     public PaymentResponse getPayment(@PathVariable String paymentId) {
         return paymentService.getPayment(paymentId);
+    }
+
+    @PostMapping("/payments/{id}/ai-analysis")
+    public String analyzePayment(@PathVariable("id") String id) {
+        return paymentAnalysisService.analyze(id);
     }
 }
