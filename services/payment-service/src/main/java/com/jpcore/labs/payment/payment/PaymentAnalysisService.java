@@ -1,6 +1,6 @@
 package com.jpcore.labs.payment.payment;
 
-import com.jpcore.labs.payment.ai.AiService;
+import com.jpcore.labs.payment.ai.PaymentAiAnalyzer;
 import com.jpcore.labs.payment.ai.PaymentAnalysisInput;
 import org.springframework.stereotype.Service;
 
@@ -8,11 +8,11 @@ import org.springframework.stereotype.Service;
 public class PaymentAnalysisService {
 
     private final PaymentService paymentService;
-    private final AiService aiService;
+    private final PaymentAiAnalyzer paymentAiAnalyzer;
 
-    public PaymentAnalysisService(PaymentService paymentService, AiService aiService) {
+    public PaymentAnalysisService(PaymentService paymentService, PaymentAiAnalyzer paymentAiAnalyzer) {
         this.paymentService = paymentService;
-        this.aiService = aiService;
+        this.paymentAiAnalyzer = paymentAiAnalyzer;
     }
 
     public String analyze(String paymentId) {
@@ -20,6 +20,6 @@ public class PaymentAnalysisService {
         PaymentAnalysisInput input = new PaymentAnalysisInput(
                 payment.amount(), payment.currency(), payment.description(), payment.status()
         );
-        return aiService.analyze(input);
+        return paymentAiAnalyzer.analyze(input);
     }
 }

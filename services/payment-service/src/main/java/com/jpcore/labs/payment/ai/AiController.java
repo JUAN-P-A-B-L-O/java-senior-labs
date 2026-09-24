@@ -8,14 +8,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/ai")
 public class AiController {
 
-    private final AiService aiService;
+    private final PaymentAiAnalyzer paymentAiAnalyzer;
 
-    public AiController(AiService aiService) {
-        this.aiService = aiService;
+    public AiController(PaymentAiAnalyzer paymentAiAnalyzer) {
+        this.paymentAiAnalyzer = paymentAiAnalyzer;
     }
 
     @GetMapping("/test")
     public String testCall() {
-        return aiService.testCall();
+        return paymentAiAnalyzer.testCall();
     }
 }

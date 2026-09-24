@@ -1,6 +1,6 @@
 package com.jpcore.labs.payment.payment;
 
-import com.jpcore.labs.payment.ai.AiService;
+import com.jpcore.labs.payment.ai.PaymentAiAnalyzer;
 import com.jpcore.labs.payment.ai.PaymentAnalysisInput;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,8 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PaymentAnalysisTest {
 
     private final PaymentService paymentService = mock(PaymentService.class);
-    private final AiService aiService = mock(AiService.class);
-    private final PaymentAnalysisService analysisService = new PaymentAnalysisService(paymentService, aiService);
+    private final PaymentAiAnalyzer paymentAiAnalyzer = mock(PaymentAiAnalyzer.class);
+    private final PaymentAnalysisService analysisService = new PaymentAnalysisService(paymentService, paymentAiAnalyzer);
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
             new PaymentController(paymentService, analysisService)
     ).build();
@@ -35,14 +35,14 @@ class PaymentAnalysisTest {
         PaymentAnalysisInput input = new PaymentAnalysisInput(
                 amount, "BRL", "Test payment", PaymentStatus.COMPLETED
         );
-        when(aiService.analyze(input)).thenReturn("The payment of 100.50 BRL is completed.");
+        when(paymentAiAnalyzer.analyze(input)).thenReturn("The payment of 100.50 BRL is completed.");
 
         mockMvc.perform(post("/api/payments/{id}/ai-analysis", id))
                 .andExpect(status().isOk())
                 .andExpect(content().string("The payment of 100.50 BRL is completed."));
 
         verify(paymentService).findById(id);
-        verify(aiService).analyze(input);
+        verify(paymentAiAnalyzer).analyze(input);
     }
 
     @Test
@@ -53,6 +53,6 @@ class PaymentAnalysisTest {
         mockMvc.perform(post("/api/payments/{id}/ai-analysis", id))
                 .andExpect(status().isNotFound());
 
-        verifyNoInteractions(aiService);
+        verifyNoInteractions(paymentAiAnalyzer);
     }
 }
