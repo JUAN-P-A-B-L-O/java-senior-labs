@@ -1,5 +1,6 @@
 package com.jpcore.labs.payment.payment;
 
+import com.jpcore.labs.payment.ai.PaymentAnalysisResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,7 +52,7 @@ public class PaymentController {
     }
 
     @PostMapping("/payments/{id}/ai-analysis")
-    public String analyzePayment(@PathVariable("id") String id) {
+    public PaymentAnalysisResponse analyzePayment(@PathVariable("id") String id) {
         return paymentAnalysisService.analyze(id);
     }
 }

@@ -4,6 +4,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,14 +28,19 @@ public class PaymentAiAnalyzer {
         return chatModel.call("Say hello in one short sentence.");
     }
 
-    public String analyze(PaymentAnalysisInput input) {
+    public PaymentAnalysisResponse analyze(PaymentAnalysisInput input) {
+        BeanOutputConverter<PaymentAnalysisResponse> converter =
+                new BeanOutputConverter<>(PaymentAnalysisResponse.class);
         UserMessage userMessage = new UserMessage("""
                 Amount: %s
                 Currency: %s
                 Status: %s
                 Description: %s
                 """.formatted(input.amount(), input.currency(), input.status(), input.description()));
-        Prompt prompt = new Prompt(List.of(new SystemMessage(SYSTEM_PROMPT), userMessage));
-        return chatModel.call(prompt).getResult().getOutput().getText();
+        Prompt prompt = new Prompt(List.of(
+                new SystemMessage(SYSTEM_PROMPT + "\n" + converter.getFormat()), userMessage
+        ));
+        String response = chatModel.call(prompt).getResult().getOutput().getText();
+        return converter.convert(response);
     }
 }

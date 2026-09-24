@@ -2,6 +2,7 @@ package com.jpcore.labs.payment.payment;
 
 import com.jpcore.labs.payment.ai.PaymentAiAnalyzer;
 import com.jpcore.labs.payment.ai.PaymentAnalysisInput;
+import com.jpcore.labs.payment.ai.PaymentAnalysisResponse;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -15,7 +16,7 @@ public class PaymentAnalysisService {
         this.paymentAiAnalyzer = paymentAiAnalyzer;
     }
 
-    public String analyze(String paymentId) {
+    public PaymentAnalysisResponse analyze(String paymentId) {
         PaymentResponse payment = paymentService.findById(paymentId);
         PaymentAnalysisInput input = new PaymentAnalysisInput(
                 payment.amount(), payment.currency(), payment.description(), payment.status()

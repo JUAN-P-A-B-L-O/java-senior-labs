@@ -2,6 +2,7 @@ package com.jpcore.labs.payment.payment;
 
 import com.jpcore.labs.payment.ai.PaymentAiAnalyzer;
 import com.jpcore.labs.payment.ai.PaymentAnalysisInput;
+import com.jpcore.labs.payment.ai.PaymentAnalysisResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -26,7 +27,7 @@ class PaymentAnalysisTest {
     ).build();
 
     @Test
-    void analyzesPaymentUsingOnlyAnalysisFieldsAndReturnsText() throws Exception {
+    void analyzesPaymentUsingOnlyAnalysisFieldsAndReturnsJson() throws Exception {
         String id = "11111111-1111-1111-1111-111111111111";
         BigDecimal amount = new BigDecimal("100.50");
         when(paymentService.findById(id)).thenReturn(
@@ -35,11 +36,19 @@ class PaymentAnalysisTest {
         PaymentAnalysisInput input = new PaymentAnalysisInput(
                 amount, "BRL", "Test payment", PaymentStatus.COMPLETED
         );
-        when(paymentAiAnalyzer.analyze(input)).thenReturn("The payment of 100.50 BRL is completed.");
+        when(paymentAiAnalyzer.analyze(input)).thenReturn(new PaymentAnalysisResponse(
+                "The payment of 100.50 BRL is completed.", "Unknown", "No action required."
+        ));
 
         mockMvc.perform(post("/api/payments/{id}/ai-analysis", id))
                 .andExpect(status().isOk())
-                .andExpect(content().string("The payment of 100.50 BRL is completed."));
+                .andExpect(content().json("""
+                        {
+                          "summary": "The payment of 100.50 BRL is completed.",
+                          "risk": "Unknown",
+                          "recommendedAction": "No action required."
+                        }
+                        """));
 
         verify(paymentService).findById(id);
         verify(paymentAiAnalyzer).analyze(input);
