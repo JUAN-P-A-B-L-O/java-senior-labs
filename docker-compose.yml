@@ -40,6 +40,8 @@ services:
     container_name: payment-lab-payment-service
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in the local .env file}
+      SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MODEL: claude-haiku-4-5-20251001
+      SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MAX_TOKENS: "100"
       SERVER_PORT: 8080
       DB_URL: jdbc:postgresql://postgres:5432/payment_lab
       DB_USERNAME: payment_lab
