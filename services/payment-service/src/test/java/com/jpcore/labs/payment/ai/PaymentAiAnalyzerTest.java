@@ -28,8 +28,8 @@ class PaymentAiAnalyzerTest {
                 new Generation(new AssistantMessage("""
                         {
                           "summary": "Payment completed.",
-                          "risk": "Unknown",
-                          "recommendedAction": "No action required."
+                          "risk": "LOW",
+                          "recommendedAction": "NONE"
                         }
                         """))
         )));
@@ -39,11 +39,13 @@ class PaymentAiAnalyzerTest {
         );
 
         assertThat(response).isEqualTo(new PaymentAnalysisResponse(
-                "Payment completed.", "Unknown", "No action required."
+                "Payment completed.", PaymentRisk.LOW, RecommendedAction.NONE
         ));
         ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(prompt.capture());
         assertThat(prompt.getValue().getInstructions().getFirst().getText())
-                .contains(new BeanOutputConverter<>(PaymentAnalysisResponse.class).getFormat());
+                .contains(new BeanOutputConverter<>(PaymentAnalysisResponse.class).getFormat())
+                .contains("For risk, use only LOW, MEDIUM, or HIGH.")
+                .contains("For recommendedAction, use only NONE, REVIEW, or BLOCK.");
     }
 }

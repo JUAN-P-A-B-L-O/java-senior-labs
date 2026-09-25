@@ -3,6 +3,8 @@ package com.jpcore.labs.payment.payment;
 import com.jpcore.labs.payment.ai.PaymentAiAnalyzer;
 import com.jpcore.labs.payment.ai.PaymentAnalysisInput;
 import com.jpcore.labs.payment.ai.PaymentAnalysisResponse;
+import com.jpcore.labs.payment.ai.PaymentRisk;
+import com.jpcore.labs.payment.ai.RecommendedAction;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -37,7 +39,7 @@ class PaymentAnalysisTest {
                 amount, "BRL", "Test payment", PaymentStatus.COMPLETED
         );
         when(paymentAiAnalyzer.analyze(input)).thenReturn(new PaymentAnalysisResponse(
-                "The payment of 100.50 BRL is completed.", "Unknown", "No action required."
+                "The payment of 100.50 BRL is completed.", PaymentRisk.LOW, RecommendedAction.NONE
         ));
 
         mockMvc.perform(post("/api/payments/{id}/ai-analysis", id))
@@ -45,8 +47,8 @@ class PaymentAnalysisTest {
                 .andExpect(content().json("""
                         {
                           "summary": "The payment of 100.50 BRL is completed.",
-                          "risk": "Unknown",
-                          "recommendedAction": "No action required."
+                          "risk": "LOW",
+                          "recommendedAction": "NONE"
                         }
                         """));
 
