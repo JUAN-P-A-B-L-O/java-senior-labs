@@ -1,7 +1,6 @@
 package com.jpcore.labs.payment.ai;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
 import org.springframework.core.io.ClassPathResource;
@@ -26,8 +25,8 @@ public class PaymentAiAnalyzer {
 
     private final ChatClient chatClient;
 
-    public PaymentAiAnalyzer(ChatModel chatModel) {
-        this.chatClient = ChatClient.create(chatModel);
+    public PaymentAiAnalyzer(ChatClient chatClient) {
+        this.chatClient = chatClient;
     }
 
     public String testCall() {

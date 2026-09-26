@@ -1,5 +1,6 @@
 package com.jpcore.labs.payment.ai;
 
+import com.jpcore.labs.payment.config.ChatClientConfig;
 import com.jpcore.labs.payment.payment.PaymentStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,12 +9,14 @@ import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.HttpClientErrorException;
@@ -44,7 +47,7 @@ class PaymentAiAnalyzerTest {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall())
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall())
                 .isInstanceOf(AiProviderException.class)
                 .hasMessage("AI service is currently unavailable.")
                 .hasNoCause();
@@ -69,7 +72,7 @@ class PaymentAiAnalyzerTest {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall())
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall())
                 .isInstanceOf(AiRateLimitException.class)
                 .hasMessage("AI service rate limit exceeded. Please try again later.")
                 .hasNoCause();
@@ -94,7 +97,7 @@ class PaymentAiAnalyzerTest {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall()).isSameAs(failure);
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall()).isSameAs(failure);
         verify(chatModel).call(any(Prompt.class));
     }
 
@@ -117,7 +120,7 @@ class PaymentAiAnalyzerTest {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall())
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall())
                 .isInstanceOf(AiTimeoutException.class)
                 .hasMessage("AI service request timed out.")
                 .hasNoCause();
@@ -139,7 +142,7 @@ class PaymentAiAnalyzerTest {
         RuntimeException failure = new ResourceAccessException("Connection failed", new ConnectException());
         when(chatModel.call(any(Prompt.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall()).isSameAs(failure);
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall()).isSameAs(failure);
         verify(chatModel).call(any(Prompt.class));
     }
 
@@ -149,7 +152,7 @@ class PaymentAiAnalyzerTest {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenThrow(new NonTransientAiException(message));
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).analyze(
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).analyze(
                 new PaymentAnalysisInput(BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED)
         )).isInstanceOf(AiAuthenticationException.class)
                 .hasMessage("AI service is currently unavailable.")
@@ -163,18 +166,25 @@ class PaymentAiAnalyzerTest {
         NonTransientAiException failure = new NonTransientAiException("HTTP 400 - invalid request");
         when(chatModel.call(any(Prompt.class))).thenThrow(failure);
 
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall()).isSameAs(failure);
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall()).isSameAs(failure);
         verify(chatModel).call(any(Prompt.class));
     }
 
     @Test
-    void returnsTestCallContent() {
+    void returnsTestCallContentUsingConfiguredChatClient() {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("Hello!"))
         )));
 
-        assertThat(new PaymentAiAnalyzer(chatModel).testCall()).isEqualTo("Hello!");
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(ChatModel.class, () -> chatModel);
+            context.register(ChatClientConfig.class, PaymentAiAnalyzer.class);
+            context.refresh();
+
+            assertThat(context.getBeansOfType(ChatClient.class)).hasSize(1);
+            assertThat(context.getBean(PaymentAiAnalyzer.class).testCall()).isEqualTo("Hello!");
+        }
         ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(prompt.capture());
         assertThat(prompt.getValue().getUserMessage().getText()).isEqualTo("Say hello in one short sentence.");
@@ -195,7 +205,7 @@ class PaymentAiAnalyzerTest {
                         """))
         )));
 
-        PaymentAnalysisResponse response = new PaymentAiAnalyzer(chatModel).analyze(
+        PaymentAnalysisResponse response = new PaymentAiAnalyzer(ChatClient.create(chatModel)).analyze(
                 new PaymentAnalysisInput(new BigDecimal("100.50"), "BRL", description, PaymentStatus.COMPLETED)
         );
 

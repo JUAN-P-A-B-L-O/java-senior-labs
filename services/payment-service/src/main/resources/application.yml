@@ -42,6 +42,9 @@ spring:
     enabled: true
 
 logging:
+  level:
+    com.jpcore.labs.payment.ai.AiObservabilityAdvisor: DEBUG
+    org.springframework.ai.chat.client.advisor: DEBUG
   file:
     path: ${LOG_DIR:${LOG_ROOT:/home/juaneugenio/programmig/java-senior-labs/logs}/payment-service}
 
