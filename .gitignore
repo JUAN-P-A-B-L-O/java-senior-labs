@@ -10,3 +10,7 @@ workspace
 logs/
 
 .local-auth/
+
+.env
+.env.*
+!.env.example

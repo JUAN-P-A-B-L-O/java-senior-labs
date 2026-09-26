@@ -95,6 +95,12 @@ public class PaymentService {
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = "payment", key = "#paymentId")
     public PaymentResponse getPayment(String paymentId) {
+        return findById(paymentId);
+    }
+
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "payment", key = "#paymentId")
+    public PaymentResponse findById(String paymentId) {
         return paymentRepository.findById(UUID.fromString(paymentId))
                 .map(this::toResponse)
                 .orElseThrow(() -> new PaymentNotFoundException(paymentId));

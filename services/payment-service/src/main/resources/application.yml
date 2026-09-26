@@ -1,4 +1,7 @@
 spring:
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
   application:
     name: payment-lab
   rabbitmq:
