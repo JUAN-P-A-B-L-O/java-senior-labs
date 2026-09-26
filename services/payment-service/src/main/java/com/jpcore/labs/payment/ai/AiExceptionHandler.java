@@ -8,6 +8,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class AiExceptionHandler {
 
+    @ExceptionHandler(AiRateLimitException.class)
+    public ProblemDetail rateLimitError(AiRateLimitException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+    }
+
     @ExceptionHandler(AiTimeoutException.class)
     public ProblemDetail timeoutError(AiTimeoutException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.GATEWAY_TIMEOUT, exception.getMessage());

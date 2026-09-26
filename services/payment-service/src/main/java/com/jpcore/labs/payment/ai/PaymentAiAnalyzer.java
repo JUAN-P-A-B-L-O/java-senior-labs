@@ -6,7 +6,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
@@ -59,6 +61,17 @@ public class PaymentAiAnalyzer {
                         || cause instanceof HttpTimeoutException
                         || cause instanceof TimeoutException) {
                     throw new AiTimeoutException();
+                }
+                if (cause instanceof RestClientResponseException responseException
+                        && responseException.getStatusCode().value() == 429) {
+                    throw new AiRateLimitException();
+                }
+                // Spring AI 1.0.9 exposes HTTP status only in the error message.
+                String causeMessage = cause.getMessage();
+                if ((cause instanceof NonTransientAiException || cause instanceof TransientAiException)
+                        && causeMessage != null
+                        && (causeMessage.startsWith("HTTP 429 - ") || causeMessage.startsWith("429 - "))) {
+                    throw new AiRateLimitException();
                 }
             }
             // Spring AI 1.0.9 exposes HTTP status only in the error message.

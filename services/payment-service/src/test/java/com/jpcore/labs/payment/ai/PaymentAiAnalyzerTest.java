@@ -13,6 +13,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
@@ -32,6 +35,51 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PaymentAiAnalyzerTest {
+
+    @ParameterizedTest
+    @MethodSource("rateLimitFailures")
+    void translatesRateLimitFailures(RuntimeException failure) {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall())
+                .isInstanceOf(AiRateLimitException.class)
+                .hasMessage("AI service rate limit exceeded. Please try again later.")
+                .hasNoCause();
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    static Stream<RuntimeException> rateLimitFailures() {
+        return Stream.of(
+                new NonTransientAiException("HTTP 429 - provider details"),
+                new NonTransientAiException("429 - provider details"),
+                new TransientAiException("HTTP 429 - provider details"),
+                new TransientAiException("429 - provider details"),
+                new HttpClientErrorException(HttpStatus.TOO_MANY_REQUESTS),
+                new RuntimeException(new NonTransientAiException("HTTP 429 - provider details")),
+                new RuntimeException(new HttpClientErrorException(HttpStatus.TOO_MANY_REQUESTS))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("nonRateLimitFailures")
+    void preservesFailuresThatAreNotRateLimits(RuntimeException failure) {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall()).isSameAs(failure);
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    static Stream<RuntimeException> nonRateLimitFailures() {
+        return Stream.of(
+                new TransientAiException("HTTP 503 - provider unavailable"),
+                new NonTransientAiException("HTTP 400 - body mentions 429"),
+                new HttpClientErrorException(HttpStatus.BAD_REQUEST),
+                new RuntimeException("HTTP 429 - unrelated exception"),
+                new TransientAiException(null)
+        );
+    }
 
     @ParameterizedTest
     @MethodSource("timeoutFailures")
