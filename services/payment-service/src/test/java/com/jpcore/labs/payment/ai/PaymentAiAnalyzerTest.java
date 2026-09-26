@@ -3,6 +3,7 @@ package com.jpcore.labs.payment.ai;
 import com.jpcore.labs.payment.payment.PaymentStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -12,9 +13,16 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
+import java.net.ConnectException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpConnectTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,6 +32,38 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PaymentAiAnalyzerTest {
+
+    @ParameterizedTest
+    @MethodSource("timeoutFailures")
+    void translatesTimeoutFailures(RuntimeException failure) {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall())
+                .isInstanceOf(AiTimeoutException.class)
+                .hasMessage("AI service request timed out.")
+                .hasNoCause();
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    static Stream<RuntimeException> timeoutFailures() {
+        return Stream.of(
+                new ResourceAccessException("provider details", new SocketTimeoutException("Read timed out")),
+                new ResourceAccessException("provider details", new HttpTimeoutException("request timed out")),
+                new ResourceAccessException("provider details", new HttpConnectTimeoutException("connect timed out")),
+                new RuntimeException(new RuntimeException(new TimeoutException("provider details")))
+        );
+    }
+
+    @Test
+    void preservesNonTimeoutConnectionFailures() {
+        ChatModel chatModel = mock(ChatModel.class);
+        RuntimeException failure = new ResourceAccessException("Connection failed", new ConnectException());
+        when(chatModel.call(any(Prompt.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall()).isSameAs(failure);
+        verify(chatModel).call(any(Prompt.class));
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"HTTP 401 - invalid x-api-key", "401 - invalid x-api-key"})

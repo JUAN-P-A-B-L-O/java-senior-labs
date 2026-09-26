@@ -8,7 +8,10 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.stereotype.Service;
 
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class PaymentAiAnalyzer {
@@ -50,10 +53,18 @@ public class PaymentAiAnalyzer {
     private String call(Prompt prompt) {
         try {
             return chatModel.call(prompt).getResult().getOutput().getText();
-        } catch (NonTransientAiException exception) {
+        } catch (RuntimeException exception) {
+            for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+                if (cause instanceof SocketTimeoutException
+                        || cause instanceof HttpTimeoutException
+                        || cause instanceof TimeoutException) {
+                    throw new AiTimeoutException();
+                }
+            }
             // Spring AI 1.0.9 exposes HTTP status only in the error message.
             String message = exception.getMessage();
-            if (message != null && (message.startsWith("HTTP 401 - ") || message.startsWith("401 - "))) {
+            if (exception instanceof NonTransientAiException && message != null
+                    && (message.startsWith("HTTP 401 - ") || message.startsWith("401 - "))) {
                 throw new AiAuthenticationException();
             }
             throw exception;

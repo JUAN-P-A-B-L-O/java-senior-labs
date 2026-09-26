@@ -12,8 +12,10 @@ import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
+import java.net.SocketTimeoutException;
 
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.containsString;
@@ -27,6 +29,36 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class AiExceptionHandlerTest {
+
+    @Test
+    void bothEndpointsReturnSafeProblemDetailsForTimeouts() throws Exception {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenThrow(new ResourceAccessException(
+                "Anthropic x-api-key: test-secret", new SocketTimeoutException("provider details")
+        ));
+        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(chatModel);
+        PaymentService paymentService = mock(PaymentService.class);
+        when(paymentService.findById("payment-id")).thenReturn(new PaymentResponse(
+                "payment-id", BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED
+        ));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                new AiController(analyzer),
+                new PaymentController(paymentService, new PaymentAnalysisService(paymentService, analyzer))
+        ).setControllerAdvice(new AiExceptionHandler()).build();
+
+        for (var request : java.util.List.of(get("/api/ai/test"), post("/api/payments/payment-id/ai-analysis"))) {
+            mvc.perform(request)
+                    .andExpect(status().isGatewayTimeout())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.status").value(504))
+                    .andExpect(jsonPath("$.detail").value("AI service request timed out."))
+                    .andExpect(content().string(not(containsString("test-secret"))))
+                    .andExpect(content().string(not(containsString("Anthropic"))))
+                    .andExpect(content().string(not(containsString("x-api-key"))))
+                    .andExpect(content().string(not(containsString("provider details"))));
+        }
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
 
     @Test
     void bothEndpointsReturnSafeProblemDetailsForInvalidCredentials() throws Exception {
