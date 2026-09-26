@@ -1,10 +1,10 @@
 package com.jpcore.labs.payment.ai;
 
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
 import org.springframework.stereotype.Service;
@@ -14,6 +14,7 @@ import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 @Service
@@ -29,19 +30,17 @@ public class PaymentAiAnalyzer {
             For recommendedAction, use only NONE, REVIEW, or BLOCK.
             """;
 
-    private final ChatModel chatModel;
+    private final ChatClient chatClient;
 
     public PaymentAiAnalyzer(ChatModel chatModel) {
-        this.chatModel = chatModel;
+        this.chatClient = ChatClient.create(chatModel);
     }
 
     public String testCall() {
-        return call(new Prompt("Say hello in one short sentence."));
+        return call(() -> chatClient.prompt("Say hello in one short sentence.").call().content());
     }
 
     public PaymentAnalysisResponse analyze(PaymentAnalysisInput input) {
-        BeanOutputConverter<PaymentAnalysisResponse> converter =
-                new BeanOutputConverter<>(PaymentAnalysisResponse.class);
         UserMessage userMessage = new UserMessage("""
                 Amount: %s
                 Currency: %s
@@ -49,15 +48,14 @@ public class PaymentAiAnalyzer {
                 Description: %s
                 """.formatted(input.amount(), input.currency(), input.status(), input.description()));
         Prompt prompt = new Prompt(List.of(
-                new SystemMessage(SYSTEM_PROMPT + "\n" + converter.getFormat()), userMessage
+                new SystemMessage(SYSTEM_PROMPT), userMessage
         ));
-        String response = call(prompt);
-        return converter.convert(response);
+        return call(() -> chatClient.prompt(prompt).call().entity(PaymentAnalysisResponse.class));
     }
 
-    private String call(Prompt prompt) {
+    private <T> T call(Supplier<T> request) {
         try {
-            return chatModel.call(prompt).getResult().getOutput().getText();
+            return request.get();
         } catch (RuntimeException exception) {
             for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
                 if (cause instanceof SocketTimeoutException
