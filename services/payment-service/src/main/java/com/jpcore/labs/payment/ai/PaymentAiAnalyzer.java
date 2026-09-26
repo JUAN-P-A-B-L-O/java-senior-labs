@@ -5,6 +5,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,7 +28,7 @@ public class PaymentAiAnalyzer {
     }
 
     public String testCall() {
-        return chatModel.call("Say hello in one short sentence.");
+        return call(new Prompt("Say hello in one short sentence."));
     }
 
     public PaymentAnalysisResponse analyze(PaymentAnalysisInput input) {
@@ -42,7 +43,20 @@ public class PaymentAiAnalyzer {
         Prompt prompt = new Prompt(List.of(
                 new SystemMessage(SYSTEM_PROMPT + "\n" + converter.getFormat()), userMessage
         ));
-        String response = chatModel.call(prompt).getResult().getOutput().getText();
+        String response = call(prompt);
         return converter.convert(response);
+    }
+
+    private String call(Prompt prompt) {
+        try {
+            return chatModel.call(prompt).getResult().getOutput().getText();
+        } catch (NonTransientAiException exception) {
+            // Spring AI 1.0.9 exposes HTTP status only in the error message.
+            String message = exception.getMessage();
+            if (message != null && (message.startsWith("HTTP 401 - ") || message.startsWith("401 - "))) {
+                throw new AiAuthenticationException();
+            }
+            throw exception;
+        }
     }
 }
