@@ -15,7 +15,9 @@ import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
@@ -35,6 +37,31 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PaymentAiAnalyzerTest {
+
+    @ParameterizedTest
+    @MethodSource("providerFailures")
+    void translatesProviderFailures(RuntimeException failure) {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenThrow(failure);
+
+        assertThatThrownBy(() -> new PaymentAiAnalyzer(chatModel).testCall())
+                .isInstanceOf(AiProviderException.class)
+                .hasMessage("AI service is currently unavailable.")
+                .hasNoCause();
+        verify(chatModel).call(any(Prompt.class));
+    }
+
+    static Stream<RuntimeException> providerFailures() {
+        return Stream.of(500, 502, 503, 504, 529, 599).flatMap(status -> Stream.of(
+                new TransientAiException("HTTP " + status + " - provider details\nmore details"),
+                new TransientAiException(status + " - provider details"),
+                new NonTransientAiException("HTTP " + status + " - provider details"),
+                new NonTransientAiException(status + " - provider details"),
+                new HttpServerErrorException(HttpStatusCode.valueOf(status)),
+                new RuntimeException(new TransientAiException("HTTP " + status + " - provider details")),
+                new RuntimeException(new HttpServerErrorException(HttpStatusCode.valueOf(status)))
+        ));
+    }
 
     @ParameterizedTest
     @MethodSource("rateLimitFailures")
@@ -73,8 +100,11 @@ class PaymentAiAnalyzerTest {
 
     static Stream<RuntimeException> nonRateLimitFailures() {
         return Stream.of(
-                new TransientAiException("HTTP 503 - provider unavailable"),
                 new NonTransientAiException("HTTP 400 - body mentions 429"),
+                new NonTransientAiException("HTTP 400 - body mentions HTTP 500 - provider details"),
+                new TransientAiException("HTTP 5000 - invalid status"),
+                new TransientAiException("HTTP 600 - outside server error range"),
+                new RuntimeException("HTTP 500 - unrelated exception"),
                 new HttpClientErrorException(HttpStatus.BAD_REQUEST),
                 new RuntimeException("HTTP 429 - unrelated exception"),
                 new TransientAiException(null)

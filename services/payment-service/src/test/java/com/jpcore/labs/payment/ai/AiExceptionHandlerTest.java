@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.retry.NonTransientAiException;
+import org.springframework.ai.retry.TransientAiException;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -29,6 +30,36 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class AiExceptionHandlerTest {
+
+    @Test
+    void bothEndpointsReturnSafeProblemDetailsForProviderFailures() throws Exception {
+        ChatModel chatModel = mock(ChatModel.class);
+        when(chatModel.call(any(Prompt.class))).thenThrow(new TransientAiException(
+                "HTTP 529 - Anthropic overloaded_error x-api-key: test-secret"
+        ));
+        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(chatModel);
+        PaymentService paymentService = mock(PaymentService.class);
+        when(paymentService.findById("payment-id")).thenReturn(new PaymentResponse(
+                "payment-id", BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED
+        ));
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(
+                new AiController(analyzer),
+                new PaymentController(paymentService, new PaymentAnalysisService(paymentService, analyzer))
+        ).setControllerAdvice(new AiExceptionHandler()).build();
+
+        for (var request : java.util.List.of(get("/api/ai/test"), post("/api/payments/payment-id/ai-analysis"))) {
+            mvc.perform(request)
+                    .andExpect(status().isBadGateway())
+                    .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                    .andExpect(jsonPath("$.status").value(502))
+                    .andExpect(jsonPath("$.detail").value("AI service is currently unavailable."))
+                    .andExpect(content().string(not(containsString("test-secret"))))
+                    .andExpect(content().string(not(containsString("Anthropic"))))
+                    .andExpect(content().string(not(containsString("x-api-key"))))
+                    .andExpect(content().string(not(containsString("overloaded_error"))));
+        }
+        verify(chatModel, times(2)).call(any(Prompt.class));
+    }
 
     @Test
     void bothEndpointsReturnSafeProblemDetailsForRateLimits() throws Exception {

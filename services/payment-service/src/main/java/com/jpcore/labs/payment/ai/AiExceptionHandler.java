@@ -8,6 +8,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class AiExceptionHandler {
 
+    @ExceptionHandler(AiProviderException.class)
+    public ProblemDetail providerError(AiProviderException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, exception.getMessage());
+    }
+
     @ExceptionHandler(AiRateLimitException.class)
     public ProblemDetail rateLimitError(AiRateLimitException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());

@@ -14,9 +14,12 @@ import java.net.SocketTimeoutException;
 import java.net.http.HttpTimeoutException;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 @Service
 public class PaymentAiAnalyzer {
+
+    private static final Pattern SERVER_ERROR_STATUS = Pattern.compile("^(?:HTTP )?5[0-9]{2} - ");
 
     private static final String SYSTEM_PROMPT = """
             You are a payment analyst. Analyze payments briefly using only the supplied facts.
@@ -66,12 +69,20 @@ public class PaymentAiAnalyzer {
                         && responseException.getStatusCode().value() == 429) {
                     throw new AiRateLimitException();
                 }
+                if (cause instanceof RestClientResponseException responseException
+                        && responseException.getStatusCode().is5xxServerError()) {
+                    throw new AiProviderException();
+                }
                 // Spring AI 1.0.9 exposes HTTP status only in the error message.
                 String causeMessage = cause.getMessage();
                 if ((cause instanceof NonTransientAiException || cause instanceof TransientAiException)
-                        && causeMessage != null
-                        && (causeMessage.startsWith("HTTP 429 - ") || causeMessage.startsWith("429 - "))) {
-                    throw new AiRateLimitException();
+                        && causeMessage != null) {
+                    if (causeMessage.startsWith("HTTP 429 - ") || causeMessage.startsWith("429 - ")) {
+                        throw new AiRateLimitException();
+                    }
+                    if (SERVER_ERROR_STATUS.matcher(causeMessage).find()) {
+                        throw new AiProviderException();
+                    }
                 }
             }
             // Spring AI 1.0.9 exposes HTTP status only in the error message.
