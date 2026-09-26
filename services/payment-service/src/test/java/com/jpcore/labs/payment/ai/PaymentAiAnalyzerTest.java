@@ -4,6 +4,7 @@ import com.jpcore.labs.payment.payment.PaymentStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -179,8 +180,10 @@ class PaymentAiAnalyzerTest {
         assertThat(prompt.getValue().getUserMessage().getText()).isEqualTo("Say hello in one short sentence.");
     }
 
-    @Test
-    void includesFormatInstructionsAndConvertsModelResponse() {
+    @ParameterizedTest
+    @ValueSource(strings = {"Test payment {reference}", ""})
+    @NullSource
+    void rendersPaymentTemplatesAndConvertsModelResponse(String description) {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("""
@@ -193,7 +196,7 @@ class PaymentAiAnalyzerTest {
         )));
 
         PaymentAnalysisResponse response = new PaymentAiAnalyzer(chatModel).analyze(
-                new PaymentAnalysisInput(new BigDecimal("100.50"), "BRL", "Test payment {reference}", PaymentStatus.COMPLETED)
+                new PaymentAnalysisInput(new BigDecimal("100.50"), "BRL", description, PaymentStatus.COMPLETED)
         );
 
         assertThat(response).isEqualTo(new PaymentAnalysisResponse(
@@ -208,7 +211,7 @@ class PaymentAiAnalyzerTest {
                 .contains("For risk, use only LOW, MEDIUM, or HIGH.")
                 .contains("For recommendedAction, use only NONE, REVIEW, or BLOCK.");
         assertThat(prompt.getValue().getUserMessage().getText())
-                .contains("Amount: 100.50", "Currency: BRL", "Status: COMPLETED", "Description: Test payment {reference}")
+                .contains("Amount: 100.50", "Currency: BRL", "Status: COMPLETED", "Description: " + description)
                 .contains("summary", "risk", "recommendedAction");
     }
 }
