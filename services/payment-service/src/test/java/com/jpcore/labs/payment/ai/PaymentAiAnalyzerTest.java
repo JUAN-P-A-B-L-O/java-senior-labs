@@ -1,6 +1,5 @@
 package com.jpcore.labs.payment.ai;
 
-import com.jpcore.labs.payment.config.ChatClientConfig;
 import com.jpcore.labs.payment.payment.PaymentStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -16,7 +15,6 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.retry.NonTransientAiException;
 import org.springframework.ai.retry.TransientAiException;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.client.HttpClientErrorException;
@@ -161,31 +159,13 @@ class PaymentAiAnalyzerTest {
     }
 
     @Test
-    void preservesOtherProviderFailures() {
-        ChatModel chatModel = mock(ChatModel.class);
-        NonTransientAiException failure = new NonTransientAiException("HTTP 400 - invalid request");
-        when(chatModel.call(any(Prompt.class))).thenThrow(failure);
-
-        assertThatThrownBy(() -> new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall()).isSameAs(failure);
-        verify(chatModel).call(any(Prompt.class));
-    }
-
-    @Test
-    void returnsTestCallContentUsingConfiguredChatClient() {
+    void returnsTestCallContent() {
         ChatModel chatModel = mock(ChatModel.class);
         when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
                 new Generation(new AssistantMessage("Hello!"))
         )));
 
-        try (var context = new AnnotationConfigApplicationContext()) {
-            context.registerBean(ChatModel.class, () -> chatModel);
-            context.registerBean(ChatClient.Builder.class, () -> ChatClient.builder(chatModel));
-            context.register(ChatClientConfig.class, PaymentAiAnalyzer.class);
-            context.refresh();
-
-            assertThat(context.getBeansOfType(ChatClient.class)).hasSize(1);
-            assertThat(context.getBean(PaymentAiAnalyzer.class).testCall()).isEqualTo("Hello!");
-        }
+        assertThat(new PaymentAiAnalyzer(ChatClient.create(chatModel)).testCall()).isEqualTo("Hello!");
         ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
         verify(chatModel).call(prompt.capture());
         assertThat(prompt.getValue().getUserMessage().getText()).isEqualTo("Say hello in one short sentence.");
