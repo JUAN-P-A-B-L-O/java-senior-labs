@@ -179,6 +179,7 @@ class PaymentAiAnalyzerTest {
 
         try (var context = new AnnotationConfigApplicationContext()) {
             context.registerBean(ChatModel.class, () -> chatModel);
+            context.registerBean(ChatClient.Builder.class, () -> ChatClient.builder(chatModel));
             context.register(ChatClientConfig.class, PaymentAiAnalyzer.class);
             context.refresh();
 
