@@ -6,6 +6,7 @@ import com.jpcore.labs.payment.payment.PaymentResponse;
 import com.jpcore.labs.payment.payment.PaymentService;
 import com.jpcore.labs.payment.payment.PaymentStatus;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.retry.NonTransientAiException;
@@ -37,7 +38,7 @@ class AiExceptionHandlerTest {
         when(chatModel.call(any(Prompt.class))).thenThrow(new TransientAiException(
                 "HTTP 529 - Anthropic overloaded_error x-api-key: test-secret"
         ));
-        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(chatModel);
+        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(ChatClient.create(chatModel));
         PaymentService paymentService = mock(PaymentService.class);
         when(paymentService.findById("payment-id")).thenReturn(new PaymentResponse(
                 "payment-id", BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED
@@ -67,7 +68,7 @@ class AiExceptionHandlerTest {
         when(chatModel.call(any(Prompt.class))).thenThrow(new NonTransientAiException(
                 "HTTP 429 - Anthropic rate_limit_error x-api-key: test-secret"
         ));
-        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(chatModel);
+        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(ChatClient.create(chatModel));
         PaymentService paymentService = mock(PaymentService.class);
         when(paymentService.findById("payment-id")).thenReturn(new PaymentResponse(
                 "payment-id", BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED
@@ -97,7 +98,7 @@ class AiExceptionHandlerTest {
         when(chatModel.call(any(Prompt.class))).thenThrow(new ResourceAccessException(
                 "Anthropic x-api-key: test-secret", new SocketTimeoutException("provider details")
         ));
-        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(chatModel);
+        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(ChatClient.create(chatModel));
         PaymentService paymentService = mock(PaymentService.class);
         when(paymentService.findById("payment-id")).thenReturn(new PaymentResponse(
                 "payment-id", BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED
@@ -127,7 +128,7 @@ class AiExceptionHandlerTest {
         when(chatModel.call(any(Prompt.class))).thenThrow(new NonTransientAiException(
                 "HTTP 401 - Anthropic invalid x-api-key: test-secret"
         ));
-        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(chatModel);
+        PaymentAiAnalyzer analyzer = new PaymentAiAnalyzer(ChatClient.create(chatModel));
         PaymentService paymentService = mock(PaymentService.class);
         when(paymentService.findById("payment-id")).thenReturn(new PaymentResponse(
                 "payment-id", BigDecimal.ONE, "BRL", "Test", PaymentStatus.COMPLETED
